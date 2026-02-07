@@ -1,0 +1,21 @@
+# Build output
+Debug/
+Release/
+bin/
+build/
+*.obj
+*.pch
+*.ilk
+*.pdb
+*.dll
+*.lib
+*.exp
+*.log
+
+# MSBuild / VS temp files
+*.vcxproj.user
+*.tlog/
+*.lastbuildstate
+
+# Visual Studio
+.vs/
