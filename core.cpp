@@ -41,7 +41,7 @@ static FILE* g_frameworkLog = nullptr;
 static void OpenLog()
 {
     if (!g_frameworkLog)
-        fopen_s(&g_frameworkLog, "dinput8_proxy.log", "a");
+        fopen_s(&g_frameworkLog, "dinput8_proxy.log", "w");
 }
 
 void LogFramework(const char* fmt, ...)
@@ -53,7 +53,7 @@ void LogFramework(const char* fmt, ...)
     time_t now = time(nullptr);
     struct tm local;
     localtime_s(&local, &now);
-    fprintf(g_frameworkLog, "[%04d-%02d-%02d %02d:%02d:%02d] [framework] ",
+    fprintf(g_frameworkLog, "[%04d-%02d-%02d %02d:%02d:%02d] ",
         local.tm_year + 1900, local.tm_mon + 1, local.tm_mday,
         local.tm_hour, local.tm_min, local.tm_sec);
 
@@ -141,9 +141,6 @@ void Initialize()
     s_initialized = true;
 
     LogFramework("=== Framework initializing ===");
-
-    // Resolve base address (initializes EQGameBaseAddress via eqlib)
-    eqlib::InitBaseAddress();
     LogFramework("EQGameBaseAddress = 0x%08X", static_cast<unsigned int>(EQGameBaseAddress));
 
     // Resolve ProcessGameEvents address using eqlib's FixEQGameOffset
@@ -197,12 +194,6 @@ void Shutdown()
     s_mods.clear();
 
     LogFramework("=== Framework shutdown complete ===");
-
-    if (g_frameworkLog)
-    {
-        fclose(g_frameworkLog);
-        g_frameworkLog = nullptr;
-    }
 }
 
 } // namespace Core
@@ -212,6 +203,9 @@ void Shutdown()
 // ---------------------------------------------------------------------------
 DWORD WINAPI InitThread(LPVOID lpParam)
 {
+    // Resolve base address early — FixEQGameOffset needs EQGameBaseAddress set.
+    eqlib::InitBaseAddress();
+
     // Poll until the game window handle is valid.
     // __HWnd_x (0xE678A0) is a fixed offset holding the HWND.
     // We resolve it with ASLR and read the pointer from game memory.

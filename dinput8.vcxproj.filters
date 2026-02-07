@@ -12,6 +12,9 @@
     <Filter Include="Header Files\mods">
       <UniqueIdentifier>{B2A6D4E1-7C3F-4A8D-9E5B-1F2C3D4E5F6A}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\mods">
+      <UniqueIdentifier>{A3B7C9D1-E5F2-4A6B-8C0D-2E4F6A8B0C1D}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="framework.h">
@@ -35,6 +38,9 @@
     <ClInclude Include="mods\mod_interface.h">
       <Filter>Header Files\mods</Filter>
     </ClInclude>
+    <ClInclude Include="mods\multiclass_data.h">
+      <Filter>Header Files\mods</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">
@@ -45,6 +51,9 @@
     </ClCompile>
     <ClCompile Include="hooks.cpp">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="mods\multiclass_data.cpp">
+      <Filter>Source Files\mods</Filter>
     </ClCompile>
     <ClCompile Include="pch.cpp">
       <Filter>Source Files</Filter>
