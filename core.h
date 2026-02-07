@@ -1,3 +1,11 @@
+/**
+ * @file core.h
+ * @brief Framework core — mod registry, initialization, shutdown, and logging.
+ * @date 2026-02-07
+ *
+ * @copyright Copyright (c) 2026
+ */
+
 #pragma once
 
 #include "mods/mod_interface.h"

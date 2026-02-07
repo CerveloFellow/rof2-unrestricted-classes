@@ -1,3 +1,11 @@
+/**
+ * @file hooks.cpp
+ * @brief Implementation of detour install/remove using Microsoft Detours.
+ * @date 2026-02-07
+ *
+ * @copyright Copyright (c) 2026
+ */
+
 #include "pch.h"
 #include "hooks.h"
 #include "core.h"

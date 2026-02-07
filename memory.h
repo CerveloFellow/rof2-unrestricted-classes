@@ -1,3 +1,11 @@
+/**
+ * @file memory.h
+ * @brief Memory read/write helpers for patching and reading game process memory.
+ * @date 2026-02-07
+ *
+ * @copyright Copyright (c) 2026
+ */
+
 #pragma once
 
 #include <cstdint>

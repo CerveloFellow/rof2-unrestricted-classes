@@ -1,9 +1,14 @@
+/**
+ * @file mod_interface.h
+ * @brief Abstract base class (IMod) that all framework mods must implement.
+ * @date 2026-02-07
+ *
+ * @copyright Copyright (c) 2026
+ */
+
 #pragma once
 
 #include <cstdint>
-
-// Abstract base class for all mods. Each mod implements this interface
-// and registers itself with Core during startup.
 class IMod
 {
 public:

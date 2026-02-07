@@ -1,3 +1,11 @@
+/**
+ * @file multiclass_data.h
+ * @brief MulticlassData mod — parses EdgeStat packets and exposes a static query API.
+ * @date 2026-02-07
+ *
+ * @copyright Copyright (c) 2026
+ */
+
 #pragma once
 
 #include "mod_interface.h"

@@ -1,3 +1,11 @@
+/**
+ * @file proxy.h
+ * @brief Function pointer typedefs and externs for proxying the real dinput8.dll exports.
+ * @date 2026-02-07
+ *
+ * @copyright Copyright (c) 2026
+ */
+
 #pragma once
 
 // Function pointer typedefs for the 6 dinput8.dll exports we proxy.

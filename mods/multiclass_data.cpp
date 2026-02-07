@@ -1,3 +1,11 @@
+/**
+ * @file multiclass_data.cpp
+ * @brief Implementation of the MulticlassData mod — EdgeStat packet handling and stat cache.
+ * @date 2026-02-07
+ *
+ * @copyright Copyright (c) 2026
+ */
+
 #include "pch.h"
 #include "multiclass_data.h"
 #include "../core.h"

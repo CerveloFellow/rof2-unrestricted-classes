@@ -1,8 +1,14 @@
-// dllmain.cpp : dinput8.dll proxy for ROF2 EverQuest client
-//
-// This DLL acts as a transparent proxy: the game loads our dinput8.dll from its
-// directory, and we forward every DirectInput call to the real system DLL.
-// Logging is written to dinput8_proxy.log in the game directory for verification.
+/**
+ * @file dllmain.cpp
+ * @brief DLL entry point and exported proxy functions for the dinput8.dll proxy.
+ * @date 2026-02-07
+ *
+ * @copyright Copyright (c) 2026
+ *
+ * This DLL acts as a transparent proxy: the game loads our dinput8.dll from its
+ * directory, and we forward every DirectInput call to the real system DLL.
+ * Mod registration and framework init thread launch happen in DLL_PROCESS_ATTACH.
+ */
 
 #include "pch.h"
 #include "core.h"

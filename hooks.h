@@ -1,3 +1,11 @@
+/**
+ * @file hooks.h
+ * @brief Detour management — install, remove, and track function hooks via MS Detours.
+ * @date 2026-02-07
+ *
+ * @copyright Copyright (c) 2026
+ */
+
 #pragma once
 
 #include <cstdint>

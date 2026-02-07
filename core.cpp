@@ -1,3 +1,11 @@
+/**
+ * @file core.cpp
+ * @brief Implementation of the framework core — mod lifecycle, hooks, eqlib glue, and logging.
+ * @date 2026-02-07
+ *
+ * @copyright Copyright (c) 2026
+ */
+
 #include "pch.h"
 #include "core.h"
 #include "hooks.h"
