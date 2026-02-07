@@ -1,0 +1,4 @@
+[submodule "eqlib"]
+	path = eqlib
+	url = https://github.com/macroquest/eqlib.git
+	branch = emu

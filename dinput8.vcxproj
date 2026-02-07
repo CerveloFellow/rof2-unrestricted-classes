@@ -42,16 +42,15 @@
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
-  <!-- Common.props will be re-added when we need eqlib/detours/vcpkg -->
-  <!-- <Import Project="..\Common.props" /> -->
+  <Import Project="dinput8.props" />
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <OutDir>$(MSBuildProjectDirectory)\..\..\build\bin\debug\</OutDir>
-    <IntDir>$(MSBuildProjectDirectory)\..\..\build\obj\Win32\debug\$(ProjectName)\</IntDir>
+    <OutDir>$(SolutionDir)build\bin\debug\</OutDir>
+    <IntDir>$(SolutionDir)build\obj\debug\$(ProjectName)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <OutDir>$(MSBuildProjectDirectory)\..\..\build\bin\release\</OutDir>
-    <IntDir>$(MSBuildProjectDirectory)\..\..\build\obj\Win32\release\$(ProjectName)\</IntDir>
+    <OutDir>$(SolutionDir)build\bin\release\</OutDir>
+    <IntDir>$(SolutionDir)build\obj\release\$(ProjectName)\</IntDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -95,9 +94,15 @@
     <ClInclude Include="framework.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="proxy.h" />
+    <ClInclude Include="core.h" />
+    <ClInclude Include="hooks.h" />
+    <ClInclude Include="memory.h" />
+    <ClInclude Include="mods\mod_interface.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp" />
+    <ClCompile Include="core.cpp" />
+    <ClCompile Include="hooks.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
@@ -106,14 +111,6 @@
   <ItemGroup>
     <None Include="dinput8.def" />
   </ItemGroup>
-  <!-- eqlib and detours will be re-added when we implement the mod framework -->
-  <!--
-  <ItemGroup>
-    <ProjectReference Include="..\eqlib\eqlib.vcxproj">
-      <Project>{7cc5690f-593c-4938-922d-73a0ac84537a}</Project>
-    </ProjectReference>
-  </ItemGroup>
-  -->
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

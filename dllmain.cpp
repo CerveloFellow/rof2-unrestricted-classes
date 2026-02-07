@@ -5,6 +5,7 @@
 // Logging is written to dinput8_proxy.log in the game directory for verification.
 
 #include "pch.h"
+#include "core.h"
 #include <cstdio>
 #include <ctime>
 
@@ -95,12 +96,19 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
         LogMessage("  DllUnregisterServer = 0x%p %s", g_pDllUnregisterServer,g_pDllUnregisterServer? "OK" : "MISSING");
         LogMessage("  GetdfDIJoystick     = 0x%p %s", g_pGetdfDIJoystick,    g_pGetdfDIJoystick    ? "OK" : "MISSING");
         LogMessage("Proxy initialization complete.");
+
+        // Launch framework init thread — waits for game window, then hooks
+        CreateThread(NULL, 0, &InitThread, NULL, 0, NULL);
+        LogMessage("Framework init thread launched.");
         break;
     }
 
     case DLL_PROCESS_DETACH:
     {
         LogMessage("DLL_PROCESS_DETACH: Shutting down proxy.");
+
+        // Shutdown framework before freeing the real DLL
+        Core::Shutdown();
 
         if (g_hRealDInput8)
         {
