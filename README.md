@@ -93,6 +93,7 @@ The `IMod` interface provides these hooks:
 ## Known Issues
 
 - **Combat Abilities button in Window Selector is still disabled for pure casters.** The CombatAbilities mod patches the code path that opens the window, but the Window Selector button remains grayed out. Use the keyboard shortcut to open it instead (Alt+C by default).
+- **#mystats page does not show mana/endurance for classes that do not natively have them.** Pure melee classes (Warrior, Rogue, Monk, etc.) will not display the mana/endurance labels at all on the #mystats inventory page because the client's stat functions have internal class checks that return 0 for non-casters, and the UI hides the labels entirely when the values are 0.
 
 ## License
 
