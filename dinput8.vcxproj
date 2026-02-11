@@ -102,6 +102,7 @@
     <ClInclude Include="memory.h" />
     <ClInclude Include="mods\mod_interface.h" />
     <ClInclude Include="mods\spellbook_unlock.h" />
+    <ClInclude Include="mods\combat_abilities.h" />
     <ClInclude Include="game_state.h" />
     <ClInclude Include="commands.h" />
   </ItemGroup>
@@ -110,6 +111,7 @@
     <ClCompile Include="core.cpp" />
     <ClCompile Include="hooks.cpp" />
     <ClCompile Include="mods\spellbook_unlock.cpp" />
+    <ClCompile Include="mods\combat_abilities.cpp" />
     <ClCompile Include="game_state.cpp" />
     <ClCompile Include="commands.cpp" />
     <ClCompile Include="pch.cpp">
