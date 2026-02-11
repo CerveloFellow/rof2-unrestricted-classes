@@ -39,8 +39,8 @@ static IsSpellcaster_t IsSpellcaster_Original  = nullptr;
 static IsSpellcaster_t IsSpellcaster2_Original = nullptr;
 static IsSpellcaster_t IsSpellcaster3_Original = nullptr;
 
-// GetSpellLevelNeeded: int __thiscall(int spellid)
-using GetSpellLevelNeeded_t = int (__fastcall*)(void* thisPtr, void* edx, int spellid);
+// GetSpellLevelNeeded: int __thiscall(int classVal)
+using GetSpellLevelNeeded_t = int (__fastcall*)(void* thisPtr, void* edx, int classVal);
 static GetSpellLevelNeeded_t GetSpellLevelNeeded_Original = nullptr;
 
 // CanStartMemming: int __thiscall(int spellid)
@@ -73,10 +73,13 @@ static int __fastcall IsSpellcaster3_Detour(void* thisPtr, void* edx)
     return 1;
 }
 
-// GetSpellLevelNeeded — return 1 (all spells usable at level 1)
-static int __fastcall GetSpellLevelNeeded_Detour(void* thisPtr, void* edx, int spellid)
+// GetSpellLevelNeeded — remove level requirement, but preserve class restrictions
+static int __fastcall GetSpellLevelNeeded_Detour(void* thisPtr, void* edx, int classVal)
 {
-    return 1;
+    int original = GetSpellLevelNeeded_Original(thisPtr, edx, classVal);
+    if (original == 0 || original == 255)
+        return original;  // Class can't use this spell — preserve restriction
+    return 1;             // Class can use it — remove level requirement
 }
 
 // CanStartMemming — always allow spell memorization
