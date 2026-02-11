@@ -1,4 +1,6 @@
-# ROF2 Client dinput8.dll - Build Guide
+# ROF2 Unrestricted Classes — Build Guide
+
+A dinput8.dll proxy for the ROF2 EverQuest client that removes class restrictions on spells, memorization, and item equipping. The **SpellbookUnlock** mod hooks the game client so that every class can cast any spell and equip any item.
 
 ## Prerequisites
 
@@ -56,8 +58,30 @@ Optionally copy `dinput8.pdb` alongside for debug symbols.
 1. Launch `eqgame.exe`
 2. Check `dinput8_proxy.log` in the game directory:
    - Proxy layer: all 6 DirectInput exports resolved "OK"
-   - Framework: "Framework initializing", base address + hook addresses logged, "hooks installed"
-3. Game should behave identically to without the proxy (no mods registered yet, hooks are pass-through)
+   - Framework: "Framework initializing", base address + hook addresses logged
+   - SpellbookUnlock: 6 hooks installed (IsSpellcaster ×3, GetSpellLevelNeeded, CanStartMemming, CanUseItem)
+3. In-game: any class should be able to scribe/memorize all spells and equip all items
+
+## Project Structure
+
+```
+├── dllmain.cpp              # DLL entry point, proxy exports, mod registration
+├── core.{h,cpp}             # Framework core — mod registry, hooks, logging
+├── hooks.{h,cpp}            # Detour management (MS Detours)
+├── mods/
+│   ├── mod_interface.h      # IMod abstract base class
+│   ├── spellbook_unlock.h   # SpellbookUnlock mod header
+│   └── spellbook_unlock.cpp # Hook implementations for class restriction bypass
+├── game_state.{h,cpp}       # Game global pointer resolution
+├── commands.{h,cpp}         # Slash command registry
+├── memory.h                 # Memory read/write helpers
+├── proxy.h, framework.h     # DLL proxy infrastructure
+├── pch.{h,cpp}              # Precompiled header
+├── eqlib/                   # Submodule — EQ struct/offset definitions (headers-only)
+└── vcpkg/                   # Submodule — package manager (provides MS Detours)
+```
+
+The framework provides 10 hook points (ProcessGameEvents, HandleWorldMessage, CreatePlayer, etc.) that are pass-through when unused. New mods can be added by implementing the `IMod` interface and registering in `dllmain.cpp`.
 
 ## Notes
 
