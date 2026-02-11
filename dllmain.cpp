@@ -14,6 +14,7 @@
 #include "core.h"
 #include "mods/spellbook_unlock.h"
 #include "mods/combat_abilities.h"
+#include "mods/stats_override.h"
 #include <memory>
 
 // ---------------------------------------------------------------------------
@@ -79,6 +80,7 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
         // Register mods before launching init thread
         Core::RegisterMod(std::make_unique<SpellbookUnlock>());
         Core::RegisterMod(std::make_unique<CombatAbilities>());
+        Core::RegisterMod(std::make_unique<StatsOverride>());
 
         // Launch framework init thread — waits for game window, then hooks
         CreateThread(NULL, 0, &InitThread, NULL, 0, NULL);

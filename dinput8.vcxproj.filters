@@ -53,6 +53,9 @@
     <ClInclude Include="mods\spellbook_unlock.h">
       <Filter>Header Files\mods</Filter>
     </ClInclude>
+    <ClInclude Include="mods\stats_override.h">
+      <Filter>Header Files\mods</Filter>
+    </ClInclude>
     <ClInclude Include="game_state.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -92,6 +95,9 @@
       <Filter>Source Files\mods</Filter>
     </ClCompile>
     <ClCompile Include="mods\spellbook_unlock.cpp">
+      <Filter>Source Files\mods</Filter>
+    </ClCompile>
+    <ClCompile Include="mods\stats_override.cpp">
       <Filter>Source Files\mods</Filter>
     </ClCompile>
     <ClCompile Include="game_state.cpp">
