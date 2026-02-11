@@ -90,6 +90,10 @@ The `IMod` interface provides these hooks:
 - `OnSetGameState()` — game state transitions (zoning, char select)
 - `OnCleanUI()` / `OnReloadUI()` — UI lifecycle
 
+## Known Issues
+
+- **Combat Abilities button in Window Selector is still disabled for pure casters.** The CombatAbilities mod patches the code path that opens the window, but the Window Selector button remains grayed out. Use the keyboard shortcut to open it instead (Alt+C by default).
+
 ## License
 
 This project is for use with private/custom EverQuest servers only.
