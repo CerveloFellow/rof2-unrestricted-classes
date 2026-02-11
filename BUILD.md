@@ -2,44 +2,41 @@
 
 ## Prerequisites
 
-- **Visual Studio 2026** with C++ desktop development workload (v145 toolset)
+- **Visual Studio 2026** with the "Desktop development with C++" workload (includes v145 toolset and Windows SDK)
 - **Git** with submodule support
-- **Windows SDK** (included with Visual Studio)
 
 ## Clone & Setup
 
 ```
 git clone --recurse-submodules https://github.com/CerveloFellow/rof2client-dinput8.git
 cd rof2client-dinput8
-```
-
-If already cloned without submodules:
-
-```
-git submodule update --init --recursive
-```
-
-### Bootstrap vcpkg (one-time)
-
-```
 vcpkg\bootstrap-vcpkg.bat
 ```
 
-This downloads the vcpkg binary. Detours is then automatically installed on first build via vcpkg manifest mode.
+The `--recurse-submodules` flag fetches the `eqlib` and `vcpkg` submodules. The bootstrap script downloads the vcpkg binary (one-time setup).
+
+If you already cloned without `--recurse-submodules`:
+
+```
+git submodule update --init --recursive
+vcpkg\bootstrap-vcpkg.bat
+```
 
 ## Build
 
+On the first build, vcpkg will automatically download and compile Microsoft Detours. Subsequent builds skip this step.
+
 ### From Visual Studio
 
-Open `dinput8.sln` and build Debug|Win32 or Release|Win32. vcpkg will fetch and build Detours automatically on first build.
+Open `dinput8.sln` and build **Debug|Win32** or **Release|Win32**.
 
-### From Command Line (Developer Command Prompt)
+### From Developer Command Prompt
 
 ```
 MSBuild.exe dinput8.sln /p:Configuration=Debug /p:Platform=Win32
 ```
 
-### From Command Line (MSYS2/Git Bash)
+### From MSYS2 / Git Bash
 
 ```bash
 MSYS_NO_PATHCONV=1 "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe" \
@@ -64,7 +61,7 @@ Optionally copy `dinput8.pdb` alongside for debug symbols.
 
 ## Notes
 
-- In MSYS2/Git Bash, prefix the MSBuild command with `MSYS_NO_PATHCONV=1` so `/p:` flags aren't interpreted as file paths.
+- The `MSYS_NO_PATHCONV=1` prefix is required in Git Bash to prevent `/p:` flags from being interpreted as Unix paths.
 - The `EQLIB_STATIC` preprocessor define is set in `dinput8.props` — this enables headers-only usage of eqlib without linking eqlib.lib.
 - The `vcpkg_installed/` directory is created locally by vcpkg manifest mode and is git-ignored.
-- The vcpkg submodule is used instead of a system-wide vcpkg installation to ensure a version that recognizes VS 2026.
+- The vcpkg submodule pins a version that recognizes VS 2026 (the copy bundled with VS 2026 predates it and cannot detect it).
