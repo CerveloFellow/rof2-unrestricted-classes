@@ -16,6 +16,9 @@
     <ProjectGuid>{cc75bdd5-2625-436b-92ae-4d31a8d314f0}</ProjectGuid>
     <RootNamespace>dinput8</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <VcpkgTriplet>x86-windows-static</VcpkgTriplet>
+    <VcpkgEnableManifest>true</VcpkgEnableManifest>
+    <VcpkgRoot>$(MSBuildProjectDirectory)\vcpkg\</VcpkgRoot>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">

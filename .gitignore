@@ -19,3 +19,9 @@ build/
 
 # Visual Studio
 .vs/
+
+# Claude Code
+.claude/
+
+# vcpkg manifest mode
+vcpkg_installed/

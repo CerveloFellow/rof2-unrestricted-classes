@@ -1,11 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup Label="UserMacros">
-    <!-- Path to macroquest-emu tree for vcpkg dependencies (Detours) -->
-    <MQRoot>$(MSBuildProjectDirectory)\..\macroquest-emu\</MQRoot>
-    <VCPKG_InstalledRoot>$(MQRoot)contrib\vcpkg\installed\</VCPKG_InstalledRoot>
-    <VCPKG_StaticRoot>$(VCPKG_InstalledRoot)x86-windows-static\</VCPKG_StaticRoot>
-
     <!-- eqlib submodule -->
     <eqlibRoot>$(MSBuildProjectDirectory)\eqlib\</eqlibRoot>
   </PropertyGroup>
@@ -13,7 +8,7 @@
   <ItemDefinitionGroup>
     <!-- Shared compiler settings -->
     <ClCompile>
-      <AdditionalIncludeDirectories>$(eqlibRoot)include;$(VCPKG_StaticRoot)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(eqlibRoot)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>EQLIB_STATIC;WIN32_LEAN_AND_MEAN;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
@@ -22,7 +17,6 @@
   <!-- Debug linker settings -->
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
     <Link>
-      <AdditionalLibraryDirectories>$(VCPKG_StaticRoot)debug\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>detours.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
@@ -30,7 +24,6 @@
   <!-- Release linker settings -->
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
     <Link>
-      <AdditionalLibraryDirectories>$(VCPKG_StaticRoot)lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>detours.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
