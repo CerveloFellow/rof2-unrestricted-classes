@@ -1,7 +1,7 @@
 /**
  * @file spellbook_unlock.cpp
  * @brief Implementation of SpellbookUnlock mod — hooks IsSpellcaster, GetSpellLevelNeeded,
- *        CanStartMemming, and GetUsableClasses to bypass class restrictions.
+ *        CanStartMemming, and CanUseItem to bypass class restrictions.
  * @date 2026-02-07
  *
  * @copyright Copyright (c) 2026
@@ -9,7 +9,6 @@
 
 #include "pch.h"
 #include "spellbook_unlock.h"
-#include "multiclass_data.h"
 #include "../core.h"
 #include "../hooks.h"
 
@@ -29,7 +28,6 @@ extern "C" uintptr_t EQGameBaseAddress;
 #define EQ_Character__IsSpellcaster_2_x     0x4288E0
 #define EQ_Character__IsSpellcaster_3_x     0x59FB90
 #define CSpellBookWnd__CanStartMemming_x    0x75BD40
-#define EQ_Item__GetUsableClasses_x         0x7B4CE0
 
 // ---------------------------------------------------------------------------
 // Original function typedefs and pointers (thiscall via fastcall trick)
@@ -49,9 +47,9 @@ static GetSpellLevelNeeded_t GetSpellLevelNeeded_Original = nullptr;
 using CanStartMemming_t = int (__fastcall*)(void* thisPtr, void* edx, int spellid);
 static CanStartMemming_t CanStartMemming_Original = nullptr;
 
-// GetUsableClasses: int __thiscall(int a1, DWORD a2)
-using GetUsableClasses_t = int (__fastcall*)(void* thisPtr, void* edx, int a1, DWORD a2);
-static GetUsableClasses_t GetUsableClasses_Original = nullptr;
+// CanUseItem: bool __thiscall(const ItemPtr& pItem, bool bUseRequiredLvl, bool bOutput)
+using CanUseItem_t = bool (__fastcall*)(void* thisPtr, void* edx, const void* pItem, bool bUseRequiredLvl, bool bOutput);
+static CanUseItem_t CanUseItem_Original = nullptr;
 
 // ---------------------------------------------------------------------------
 // Detours
@@ -75,12 +73,10 @@ static int __fastcall IsSpellcaster3_Detour(void* thisPtr, void* edx)
     return 1;
 }
 
-// GetSpellLevelNeeded — return 1 if classless (all spells usable at level 1)
+// GetSpellLevelNeeded — return 1 (all spells usable at level 1)
 static int __fastcall GetSpellLevelNeeded_Detour(void* thisPtr, void* edx, int spellid)
 {
-    if (MulticlassData::HasData())
-        return 1;
-    return GetSpellLevelNeeded_Original(thisPtr, edx, spellid);
+    return 1;
 }
 
 // CanStartMemming — always allow spell memorization
@@ -89,12 +85,10 @@ static int __fastcall CanStartMemming_Detour(void* thisPtr, void* edx, int spell
     return 1;
 }
 
-// GetUsableClasses — return -1 if classless (bypass equip class restrictions)
-static int __fastcall GetUsableClasses_Detour(void* thisPtr, void* edx, int a1, DWORD a2)
+// CanUseItem — always return true (bypass item class/race restrictions)
+static bool __fastcall CanUseItem_Detour(void* thisPtr, void* edx, const void* pItem, bool bUseRequiredLvl, bool bOutput)
 {
-    if (MulticlassData::IsClassless())
-        return -1;
-    return GetUsableClasses_Original(thisPtr, edx, a1, a2);
+    return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -136,10 +130,10 @@ bool SpellbookUnlock::Initialize()
     CanStartMemming_Original = reinterpret_cast<CanStartMemming_t>(canStartMemmingAddr);
     LogFramework("SpellbookUnlock: CanStartMemming = 0x%08X", static_cast<unsigned int>(canStartMemmingAddr));
 
-    uintptr_t getUsableClassesAddr = static_cast<uintptr_t>(EQ_Item__GetUsableClasses_x)
+    uintptr_t canUseItemAddr = static_cast<uintptr_t>(CharacterZoneClient__CanUseItem_x)
         - eqlib::EQGamePreferredAddress + EQGameBaseAddress;
-    GetUsableClasses_Original = reinterpret_cast<GetUsableClasses_t>(getUsableClassesAddr);
-    LogFramework("SpellbookUnlock: GetUsableClasses = 0x%08X", static_cast<unsigned int>(getUsableClassesAddr));
+    CanUseItem_Original = reinterpret_cast<CanUseItem_t>(canUseItemAddr);
+    LogFramework("SpellbookUnlock: CanUseItem = 0x%08X", static_cast<unsigned int>(canUseItemAddr));
 
     // --- Install hooks ---
     Hooks::Install("IsSpellcaster",
@@ -162,9 +156,9 @@ bool SpellbookUnlock::Initialize()
         reinterpret_cast<void**>(&CanStartMemming_Original),
         reinterpret_cast<void*>(&CanStartMemming_Detour));
 
-    Hooks::Install("GetUsableClasses",
-        reinterpret_cast<void**>(&GetUsableClasses_Original),
-        reinterpret_cast<void*>(&GetUsableClasses_Detour));
+    Hooks::Install("CanUseItem",
+        reinterpret_cast<void**>(&CanUseItem_Original),
+        reinterpret_cast<void*>(&CanUseItem_Detour));
 
     LogFramework("SpellbookUnlock: Initialized — 6 hooks installed");
     return true;

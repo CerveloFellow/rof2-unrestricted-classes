@@ -101,31 +101,17 @@
     <ClInclude Include="hooks.h" />
     <ClInclude Include="memory.h" />
     <ClInclude Include="mods\mod_interface.h" />
-    <ClInclude Include="mods\multiclass_data.h" />
-    <ClInclude Include="mods\labels.h" />
     <ClInclude Include="mods\spellbook_unlock.h" />
     <ClInclude Include="game_state.h" />
     <ClInclude Include="commands.h" />
-    <ClInclude Include="config.h" />
-    <ClInclude Include="mq_compat.h" />
-    <ClInclude Include="mods\map\map.h" />
-    <ClInclude Include="mods\map\map_object.h" />
-    <ClInclude Include="mods\map\map_mod.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="core.cpp" />
     <ClCompile Include="hooks.cpp" />
-    <ClCompile Include="mods\multiclass_data.cpp" />
-    <ClCompile Include="mods\labels.cpp" />
     <ClCompile Include="mods\spellbook_unlock.cpp" />
     <ClCompile Include="game_state.cpp" />
     <ClCompile Include="commands.cpp" />
-    <ClCompile Include="config.cpp" />
-    <ClCompile Include="mq_compat.cpp" />
-    <ClCompile Include="mods\map\map_object.cpp" />
-    <ClCompile Include="mods\map\map_api.cpp" />
-    <ClCompile Include="mods\map\map_mod.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
