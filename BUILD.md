@@ -8,8 +8,8 @@
 ## Clone & Setup
 
 ```
-git clone --recurse-submodules https://github.com/CerveloFellow/rof2client-dinput8.git
-cd rof2client-dinput8
+git clone --recurse-submodules https://github.com/CerveloFellow/rof2-unrestricted-classes.git
+cd rof2-unrestricted-classes
 vcpkg\bootstrap-vcpkg.bat
 ```
 
