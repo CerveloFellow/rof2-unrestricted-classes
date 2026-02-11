@@ -10,7 +10,7 @@
 ```
 git clone --recurse-submodules https://github.com/CerveloFellow/rof2-unrestricted-classes.git
 cd rof2-unrestricted-classes
-vcpkg\bootstrap-vcpkg.bat
+vcpkg/bootstrap-vcpkg.bat
 ```
 
 The `--recurse-submodules` flag fetches the `eqlib` and `vcpkg` submodules. The bootstrap script downloads the vcpkg binary (one-time setup).
@@ -19,7 +19,7 @@ If you already cloned without `--recurse-submodules`:
 
 ```
 git submodule update --init --recursive
-vcpkg\bootstrap-vcpkg.bat
+vcpkg/bootstrap-vcpkg.bat
 ```
 
 ## Build
