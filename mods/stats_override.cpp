@@ -44,6 +44,9 @@ extern "C" uintptr_t EQGameBaseAddress;
 #define CharacterZoneClient__Max_Endurance_x  0x582020
 #define __GetGaugeValueFromEQ_x               0x762410
 #define __GetLabelFromEQ_x                    0x763640
+#define __eq_new_x                            0x8DBB3B
+#define __eq_delete_x                         0x8DB146
+#define CXStr__gFreeLists_x                   0xB618A0
 
 // ---------------------------------------------------------------------------
 // Server stat keys (from classless-dll eStatEntry enum)
@@ -57,6 +60,36 @@ enum eStatEntry : uint32_t
     eStatMaxHP          = 5,
     eStatMaxMana        = 6,
     eStatMaxEndur       = 7,
+    eStatATK            = 8,
+    eStatAC             = 9,
+    eStatSTR            = 10,
+    eStatSTA            = 11,
+    eStatDEX            = 12,
+    eStatAGI            = 13,
+    eStatINT            = 14,
+    eStatWIS            = 15,
+    eStatCHA            = 16,
+    eStatMR             = 17,
+    eStatFR             = 18,
+    eStatCR             = 19,
+    eStatPR             = 20,
+    eStatDR             = 21,
+    eStatWalkspeed      = 22,
+    eStatRunspeed       = 23,
+    eStatWeight         = 24,
+    eStatMaxWeight      = 25,
+    eStatMeleePower     = 26,
+    eStatSpellPower     = 27,
+    eStatHealingPower   = 28,
+    eStatMeleeHaste     = 29,
+    eStatSpellHaste     = 30,
+    eStatHealingHaste   = 31,
+    eStatMeleeCrit      = 32,
+    eStatSpellCrit      = 33,
+    eStatHealingCrit    = 34,
+    eStatAvoidance      = 35,
+    eStatMitigation     = 36,
+    eStatAAPoints       = 37,
 };
 
 // ---------------------------------------------------------------------------
@@ -97,6 +130,62 @@ struct CStrRep_Raw
     void*    freeList;   // 0x10
     char     utf8[4];    // 0x14 — variable-length string data starts here
 };
+
+// ---------------------------------------------------------------------------
+// Game allocator function pointers (resolved in Initialize)
+// ---------------------------------------------------------------------------
+using EqAllocFn = void*(*)(size_t);
+using EqFreeFn  = void(*)(void*);
+
+static EqAllocFn s_eqAlloc   = nullptr;
+static EqFreeFn  s_eqFree    = nullptr;
+static void*     s_gFreeLists = nullptr;  // CXFreeList array in eqgame.exe
+
+// Set a CXStr's text, allocating a new CStrRep if the buffer is too small.
+// Uses the game's own allocator so the game can later free our CStrRep normally.
+static void SetCXStrText(void* pCXStr, const char* text)
+{
+    if (!pCXStr || !text || !s_eqAlloc || !s_eqFree) return;
+
+    size_t len = strlen(text);
+    CStrRep_Raw** ppRep = reinterpret_cast<CStrRep_Raw**>(pCXStr);
+    CStrRep_Raw* oldRep = *ppRep;
+
+    // Fast path: buffer is big enough — modify in-place
+    if (oldRep && oldRep->encoding == 0 && oldRep->alloc > len)
+    {
+        memcpy(oldRep->utf8, text, len + 1);
+        oldRep->length = static_cast<uint32_t>(len);
+        return;
+    }
+
+    // Slow path: allocate a new CStrRep via the game's allocator
+    size_t dataSize = len + 1;
+    if (dataSize < 64) dataSize = 64;  // match a likely free-list bucket
+
+    // CStrRep header is 0x14 bytes, then string data follows
+    size_t totalSize = 0x14 + dataSize;
+    CStrRep_Raw* newRep = reinterpret_cast<CStrRep_Raw*>(s_eqAlloc(totalSize));
+    if (!newRep) return;
+
+    memset(newRep, 0, totalSize);
+    newRep->refCount = 1;
+    newRep->alloc    = static_cast<uint32_t>(dataSize);
+    newRep->length   = static_cast<uint32_t>(len);
+    newRep->encoding = 0;  // UTF8
+    newRep->freeList = s_gFreeLists;  // so game's FreeRep can handle it
+    memcpy(newRep->utf8, text, len + 1);
+
+    // Swap into the CXStr
+    *ppRep = newRep;
+
+    // Free the old rep (refcount should be 1, so this frees it)
+    if (oldRep)
+    {
+        if (--oldRep->refCount <= 0)
+            s_eqFree(oldRep);
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Stat override storage — keyed by server stat key, values are uint64
@@ -277,6 +366,51 @@ static std::string GetClassString()
     return result;
 }
 
+// Class abbreviation array (from classless-dll)
+static const char* ClassAbbr[17] =
+{
+    "",     // 0 unused
+    "WAR",  // 1 - Warrior
+    "CLR",  // 2 - Cleric
+    "PAL",  // 3 - Paladin
+    "RNG",  // 4 - Ranger
+    "SHD",  // 5 - Shadow Knight
+    "DRU",  // 6 - Druid
+    "MNK",  // 7 - Monk
+    "BRD",  // 8 - Bard
+    "ROG",  // 9 - Rogue
+    "SHM",  // 10 - Shaman
+    "NEC",  // 11 - Necromancer
+    "WIZ",  // 12 - Wizard
+    "MAG",  // 13 - Magician
+    "ENC",  // 14 - Enchanter
+    "BST",  // 15 - Beastlord
+    "BER",  // 16 - Berserker
+};
+
+// Build multiline class abbreviation string from bitmask
+static std::string GetClassAbbrString()
+{
+    auto it = s_statOverrides.find(eStatClassesBitmask);
+    if (it == s_statOverrides.end())
+        return "";
+
+    uint32_t mask = static_cast<uint32_t>(it->second);
+    if (!mask) return "";
+
+    std::string result;
+    for (int classId = 1; classId <= 16; ++classId)
+    {
+        if (mask & (1u << (classId - 1)))
+        {
+            if (!result.empty())
+                result += "\n";
+            result += ClassAbbr[classId];
+        }
+    }
+    return result;
+}
+
 // ---------------------------------------------------------------------------
 // Original function typedefs and pointers
 // ---------------------------------------------------------------------------
@@ -367,8 +501,16 @@ static constexpr int LABEL_ENDUR_PCT    = 83;
 
 static constexpr int LABEL_CLASS = 3;
 
+// Custom label IDs from classless-dll SIDL XML
+static constexpr int LABEL_CLASS_ABBR  = 6666;  // class abbreviations (SHM/NEC/MAG)
+static constexpr int LABEL_AVOIDANCE   = 6667;  // avoidance stat
+static constexpr int LABEL_MITIGATION  = 6668;  // mitigation stat
+
 // One-shot debug flag — set by /classdebug, logs next label type 3 call
 static bool s_debugNextClassLabel = false;
+
+// Track all label IDs the game requests
+static std::unordered_map<int, int> s_seenLabelIds;  // labelId → call count
 
 static void CmdClassDebug(eqlib::PlayerClient* /*pChar*/, const char* /*szLine*/)
 {
@@ -391,6 +533,11 @@ static void CmdClassDebug(eqlib::PlayerClient* /*pChar*/, const char* /*szLine*/
     else
         WriteChatf("  GetClassString() = '%s'", classStr.c_str());
 
+    // Dump all seen label IDs
+    WriteChatf("  --- Seen label IDs (%d unique) ---", static_cast<int>(s_seenLabelIds.size()));
+    for (const auto& [id, count] : s_seenLabelIds)
+        WriteChatf("    labelId=%d  (called %d times)", id, count);
+
     // Arm one-shot logging for next label type 3
     s_debugNextClassLabel = true;
     WriteChatf("  Armed: will log next label type 3 call");
@@ -400,6 +547,9 @@ static void CmdClassDebug(eqlib::PlayerClient* /*pChar*/, const char* /*szLine*/
 static bool __cdecl GetLabelFromEQ_Detour(int labelId, void* pStr, bool* pEnabled, unsigned long* pColor)
 {
     bool result = GetLabelFromEQ_Original(labelId, pStr, pEnabled, pColor);
+
+    // Track all label IDs for diagnostics
+    s_seenLabelIds[labelId]++;
 
     // Override class label with multiclass titles from server bitmask
     if (labelId == LABEL_CLASS)
@@ -429,15 +579,37 @@ static bool __cdecl GetLabelFromEQ_Detour(int labelId, void* pStr, bool* pEnable
 
         if (!classStr.empty())
         {
-            // CXStr is a single CStrRep* pointer. pStr points to a CXStr object.
-            CStrRep_Raw* rep = *reinterpret_cast<CStrRep_Raw**>(pStr);
+            SetCXStrText(pStr, classStr.c_str());
+        }
+    }
 
-            if (rep && rep->encoding == 0 /* UTF8 */ && rep->alloc > classStr.size())
-            {
-                // Safe in-place modification within existing CStrRep allocation
-                memcpy(rep->utf8, classStr.c_str(), classStr.size() + 1);
-                rep->length = static_cast<uint32_t>(classStr.size());
-            }
+    // Override class abbreviation label (custom SIDL label 6666)
+    if (labelId == LABEL_CLASS_ABBR)
+    {
+        std::string abbrStr = GetClassAbbrString();
+        if (!abbrStr.empty())
+            SetCXStrText(pStr, abbrStr.c_str());
+    }
+
+    // Override avoidance label (custom SIDL label 6667)
+    if (labelId == LABEL_AVOIDANCE)
+    {
+        auto it = s_statOverrides.find(eStatAvoidance);
+        if (it != s_statOverrides.end())
+        {
+            std::string val = std::to_string(static_cast<int>(it->second));
+            SetCXStrText(pStr, val.c_str());
+        }
+    }
+
+    // Override mitigation label (custom SIDL label 6668)
+    if (labelId == LABEL_MITIGATION)
+    {
+        auto it = s_statOverrides.find(eStatMitigation);
+        if (it != s_statOverrides.end())
+        {
+            std::string val = std::to_string(static_cast<int>(it->second));
+            SetCXStrText(pStr, val.c_str());
         }
     }
 
@@ -483,6 +655,18 @@ bool StatsOverride::Initialize()
         - eqlib::EQGamePreferredAddress + EQGameBaseAddress;
     GetLabelFromEQ_Original = reinterpret_cast<GetLabelFromEQ_t>(labelAddr);
     LogFramework("StatsOverride: GetLabelFromEQ = 0x%08X", static_cast<unsigned int>(labelAddr));
+
+    // --- Resolve game allocator for CXStr text replacement ---
+    s_eqAlloc = reinterpret_cast<EqAllocFn>(
+        static_cast<uintptr_t>(__eq_new_x) - eqlib::EQGamePreferredAddress + EQGameBaseAddress);
+    s_eqFree = reinterpret_cast<EqFreeFn>(
+        static_cast<uintptr_t>(__eq_delete_x) - eqlib::EQGamePreferredAddress + EQGameBaseAddress);
+    s_gFreeLists = reinterpret_cast<void*>(
+        static_cast<uintptr_t>(CXStr__gFreeLists_x) - eqlib::EQGamePreferredAddress + EQGameBaseAddress);
+    LogFramework("StatsOverride: eqAlloc=0x%08X eqFree=0x%08X gFreeLists=0x%08X",
+        static_cast<unsigned int>(reinterpret_cast<uintptr_t>(s_eqAlloc)),
+        static_cast<unsigned int>(reinterpret_cast<uintptr_t>(s_eqFree)),
+        static_cast<unsigned int>(reinterpret_cast<uintptr_t>(s_gFreeLists)));
 
     // --- Install hooks ---
     Hooks::Install("Max_Mana",
