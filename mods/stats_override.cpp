@@ -44,6 +44,7 @@ extern "C" uintptr_t EQGameBaseAddress;
 #define CharacterZoneClient__Max_Endurance_x  0x582020
 #define __GetGaugeValueFromEQ_x               0x762410
 #define __GetLabelFromEQ_x                    0x763640
+#define EQ_Spell__GetSpellLevelNeeded_x        0x4AF700
 #define __eq_new_x                            0x8DBB3B
 #define __eq_delete_x                         0x8DB146
 #define CXStr__gFreeLists_x                   0xB618A0
@@ -429,6 +430,14 @@ static GetGaugeValueFromEQ_t GetGaugeValueFromEQ_Original = nullptr;
 using GetLabelFromEQ_t = bool (__cdecl*)(int labelId, void* pStr, bool* pEnabled, unsigned long* pColor);
 static GetLabelFromEQ_t GetLabelFromEQ_Original = nullptr;
 
+// EQ_Spell::GetSpellLevelNeeded: unsigned char __thiscall(unsigned int classIndex)
+// Returns the level a given class needs to cast this spell (255 = can't use)
+using GetSpellLevelNeeded_t = unsigned char (__fastcall*)(void* thisPtr, void* edx, unsigned int classIndex);
+static GetSpellLevelNeeded_t GetSpellLevelNeeded_Original = nullptr;
+
+// Offset of ClassLevel[MAX_CLASSES+1] array within EQ_Spell struct (uint8_t per class, 1-based index)
+static constexpr uint32_t OFF_SPELL_CLASS_LEVEL = 0x246;
+
 // ---------------------------------------------------------------------------
 // Helper: 3-tier stat resolution (uses server stat keys)
 // ---------------------------------------------------------------------------
@@ -617,6 +626,46 @@ static bool __cdecl GetLabelFromEQ_Detour(int labelId, void* pStr, bool* pEnable
 }
 
 // ---------------------------------------------------------------------------
+// GetSpellLevelNeeded detour — multiclass spell level bypass
+//
+// The client calls GetSpellLevelNeeded(playerClass) to check if the player
+// can cast a spell. For multiclass characters, the player's base class may
+// not be able to use the spell (returns 255). This detour checks ALL classes
+// in the server-sent bitmask and returns the minimum level needed.
+// ---------------------------------------------------------------------------
+static unsigned char __fastcall GetSpellLevelNeeded_Detour(
+    void* thisPtr, void* edx, unsigned int classIndex)
+{
+    // If no class bitmask from server, fall through to original
+    auto it = s_statOverrides.find(eStatClassesBitmask);
+    if (it == s_statOverrides.end())
+        return GetSpellLevelNeeded_Original(thisPtr, edx, classIndex);
+
+    uint32_t bitmask = static_cast<uint32_t>(it->second);
+    if (!bitmask)
+        return GetSpellLevelNeeded_Original(thisPtr, edx, classIndex);
+
+    // thisPtr is the EQ_Spell object. ClassLevel at offset 0x246, 1-based class index.
+    uint8_t* classLevels = reinterpret_cast<uint8_t*>(
+        reinterpret_cast<uintptr_t>(thisPtr) + OFF_SPELL_CLASS_LEVEL);
+
+    int minLevel = 255;
+    for (int classId = 1; classId <= 16; ++classId)
+    {
+        if (bitmask & (1u << (classId - 1)))
+        {
+            int lvl = classLevels[classId];
+            if (lvl > 0 && lvl < 255 && lvl < minLevel)
+                minLevel = lvl;
+        }
+    }
+
+    return (minLevel != 255)
+        ? static_cast<unsigned char>(minLevel)
+        : GetSpellLevelNeeded_Original(thisPtr, edx, classIndex);
+}
+
+// ---------------------------------------------------------------------------
 // IMod interface
 // ---------------------------------------------------------------------------
 
@@ -656,6 +705,11 @@ bool StatsOverride::Initialize()
     GetLabelFromEQ_Original = reinterpret_cast<GetLabelFromEQ_t>(labelAddr);
     LogFramework("StatsOverride: GetLabelFromEQ = 0x%08X", static_cast<unsigned int>(labelAddr));
 
+    uintptr_t spellLevelAddr = static_cast<uintptr_t>(EQ_Spell__GetSpellLevelNeeded_x)
+        - eqlib::EQGamePreferredAddress + EQGameBaseAddress;
+    GetSpellLevelNeeded_Original = reinterpret_cast<GetSpellLevelNeeded_t>(spellLevelAddr);
+    LogFramework("StatsOverride: GetSpellLevelNeeded = 0x%08X", static_cast<unsigned int>(spellLevelAddr));
+
     // --- Resolve game allocator for CXStr text replacement ---
     s_eqAlloc = reinterpret_cast<EqAllocFn>(
         static_cast<uintptr_t>(__eq_new_x) - eqlib::EQGamePreferredAddress + EQGameBaseAddress);
@@ -689,9 +743,13 @@ bool StatsOverride::Initialize()
         reinterpret_cast<void**>(&GetLabelFromEQ_Original),
         reinterpret_cast<void*>(&GetLabelFromEQ_Detour));
 
+    Hooks::Install("GetSpellLevelNeeded",
+        reinterpret_cast<void**>(&GetSpellLevelNeeded_Original),
+        reinterpret_cast<void*>(&GetSpellLevelNeeded_Detour));
+
     Commands::AddCommand("/classdebug", CmdClassDebug);
 
-    LogFramework("StatsOverride: Initialized — 5 hooks installed");
+    LogFramework("StatsOverride: Initialized — 6 hooks installed");
     return true;
 }
 
