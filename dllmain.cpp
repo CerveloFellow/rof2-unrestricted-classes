@@ -23,6 +23,7 @@
 #include "mods/mq2_prevention.h"
 #include "mods/exception_fix.h"
 #include "mods/who_multiclass.h"
+#include "mods/multi_pet.h"
 #include <memory>
 
 // ---------------------------------------------------------------------------
@@ -98,6 +99,7 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
         Core::RegisterMod(std::make_unique<RaceInjection>());
         Core::RegisterMod(std::make_unique<ZoneInjection>());
         Core::RegisterMod(std::make_unique<WhoMulticlass>());
+        Core::RegisterMod(std::make_unique<MultiPet>());
 
         // Launch framework init thread — waits for game window, then hooks
         CreateThread(NULL, 0, &InitThread, NULL, 0, NULL);

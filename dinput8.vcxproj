@@ -109,6 +109,7 @@
     <ClInclude Include="mods\mq2_prevention.h" />
     <ClInclude Include="mods\exception_fix.h" />
     <ClInclude Include="mods\who_multiclass.h" />
+    <ClInclude Include="mods\multi_pet.h" />
     <ClInclude Include="game_state.h" />
     <ClInclude Include="commands.h" />
   </ItemGroup>
@@ -127,6 +128,7 @@
     <ClCompile Include="mods\mq2_prevention.cpp" />
     <ClCompile Include="mods\exception_fix.cpp" />
     <ClCompile Include="mods\who_multiclass.cpp" />
+    <ClCompile Include="mods\multi_pet.cpp" />
     <ClCompile Include="game_state.cpp" />
     <ClCompile Include="commands.cpp" />
     <ClCompile Include="pch.cpp">

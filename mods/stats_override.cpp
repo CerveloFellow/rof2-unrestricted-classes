@@ -21,11 +21,14 @@
 #include "stats_override.h"
 #include "../core.h"
 #include "../hooks.h"
+#include "../game_state.h"
+#include "../commands.h"
 
 #include <eqlib/Offsets.h>
 
 #include <cstdint>
 #include <cstring>
+#include <string>
 #include <unordered_map>
 
 // ---------------------------------------------------------------------------
@@ -43,26 +46,27 @@ extern "C" uintptr_t EQGameBaseAddress;
 #define __GetLabelFromEQ_x                    0x763640
 
 // ---------------------------------------------------------------------------
-// Stat types for the override map
+// Server stat keys (from classless-dll eStatEntry enum)
 // ---------------------------------------------------------------------------
-enum class StatType : uint8_t
+enum eStatEntry : uint32_t
 {
-    MaxMana      = 0,
-    CurMana      = 1,
-    MaxEndurance = 2,
-    CurEndurance = 3,
-    MaxHP        = 4,
-    CurHP        = 5,
+    eStatClassesBitmask = 1,
+    eStatCurHP          = 2,
+    eStatCurMana        = 3,
+    eStatCurEndur       = 4,
+    eStatMaxHP          = 5,
+    eStatMaxMana        = 6,
+    eStatMaxEndur       = 7,
 };
 
 // ---------------------------------------------------------------------------
-// Server packet structure for opcode 0x1338
+// Server packet structure for opcode 0x1338 (matches classless-dll format)
 // ---------------------------------------------------------------------------
 #pragma pack(push, 1)
 struct EdgeStatEntry
 {
-    uint8_t statType;
-    int     value;
+    uint32_t statKey;
+    uint64_t statValue;
 };
 
 struct EdgeStat_Struct
@@ -75,16 +79,203 @@ struct EdgeStat_Struct
 // Custom opcode for server-sent stat overrides
 static constexpr uint32_t OP_EdgeStats = 0x1338;
 
+// Spawn field offset for Level
+static constexpr uint32_t OFF_SPAWN_LEVEL = 0x250;
+
 // ---------------------------------------------------------------------------
-// Stat override storage
-// Server-sent values take highest priority in the 3-tier system.
+// Minimal CStrRep layout for direct buffer access (matches eqlib::CStrRep)
+// CXStr is a single CStrRep* pointer (4 bytes on x86).
+// We use this to modify label text in-place without allocating or linking
+// eqlib's CXStr implementation.
 // ---------------------------------------------------------------------------
-static std::unordered_map<StatType, int> s_statOverrides;
+struct CStrRep_Raw
+{
+    int32_t  refCount;   // 0x00
+    uint32_t alloc;      // 0x04 — total bytes allocated for string data
+    uint32_t length;     // 0x08 — current string length
+    uint32_t encoding;   // 0x0C — 0 = UTF8, 1 = UTF16
+    void*    freeList;   // 0x10
+    char     utf8[4];    // 0x14 — variable-length string data starts here
+};
+
+// ---------------------------------------------------------------------------
+// Stat override storage — keyed by server stat key, values are uint64
+// ---------------------------------------------------------------------------
+static std::unordered_map<uint32_t, uint64_t> s_statOverrides;
 
 // TEMPORARY test default — returned when original function returns 0 and no
 // server data exists. Proves the hooks are installed and working.
-// Replace with server-sent data once the server broadcasts via 0x1338.
 static constexpr int TEST_DEFAULT_VALUE = 100;
+
+// ---------------------------------------------------------------------------
+// Class title resolver (from classless-dll, level-appropriate titles)
+// ---------------------------------------------------------------------------
+static const char* GetClassTitle(int class_id, int level)
+{
+    switch (class_id)
+    {
+    case 1: // Warrior
+        if (level >= 75) return "Imperator";
+        if (level >= 70) return "Vanquisher";
+        if (level >= 65) return "Overlord";
+        if (level >= 60) return "Warlord";
+        if (level >= 55) return "Myrmidon";
+        if (level >= 51) return "Champion";
+        return "Warrior";
+    case 2: // Cleric
+        if (level >= 75) return "Exemplar";
+        if (level >= 70) return "Prelate";
+        if (level >= 65) return "Archon";
+        if (level >= 60) return "High Priest";
+        if (level >= 55) return "Templar";
+        if (level >= 51) return "Vicar";
+        return "Cleric";
+    case 3: // Paladin
+        if (level >= 75) return "Holy Defender";
+        if (level >= 70) return "Lord";
+        if (level >= 65) return "Lord Protector";
+        if (level >= 60) return "Crusader";
+        if (level >= 55) return "Knight";
+        if (level >= 51) return "Cavalier";
+        return "Paladin";
+    case 4: // Ranger
+        if (level >= 75) return "Huntmaster";
+        if (level >= 70) return "Plainswalker";
+        if (level >= 65) return "Forest Stalker";
+        if (level >= 60) return "Warder";
+        if (level >= 55) return "Outrider";
+        if (level >= 51) return "Pathfinder";
+        return "Ranger";
+    case 5: // Shadow Knight
+        if (level >= 75) return "Bloodreaver";
+        if (level >= 70) return "Scourge Knight";
+        if (level >= 65) return "Dread Lord";
+        if (level >= 60) return "Grave Lord";
+        if (level >= 55) return "Revenant";
+        if (level >= 51) return "Reaver";
+        return "Shadow Knight";
+    case 6: // Druid
+        if (level >= 75) return "Storm Caller";
+        if (level >= 70) return "Natureguard";
+        if (level >= 65) return "Storm Warden";
+        if (level >= 60) return "Hierophant";
+        if (level >= 55) return "Preserver";
+        if (level >= 51) return "Wanderer";
+        return "Druid";
+    case 7: // Monk
+        if (level >= 75) return "Ashenhand";
+        if (level >= 70) return "Stone Fist";
+        if (level >= 65) return "Transcendent";
+        if (level >= 60) return "Grandmaster";
+        if (level >= 55) return "Master";
+        if (level >= 51) return "Disciple";
+        return "Monk";
+    case 8: // Bard
+        if (level >= 75) return "Lyricist";
+        if (level >= 70) return "Performer";
+        if (level >= 65) return "Maestro";
+        if (level >= 60) return "Virtuoso";
+        if (level >= 55) return "Troubadour";
+        if (level >= 51) return "Minstrel";
+        return "Bard";
+    case 9: // Rogue
+        if (level >= 75) return "Shadowblade";
+        if (level >= 70) return "Nemesis";
+        if (level >= 65) return "Deceiver";
+        if (level >= 60) return "Assassin";
+        if (level >= 55) return "Blackguard";
+        if (level >= 51) return "Rake";
+        return "Rogue";
+    case 10: // Shaman
+        if (level >= 75) return "Spiritwatcher";
+        if (level >= 70) return "Soothsayer";
+        if (level >= 65) return "Prophet";
+        if (level >= 60) return "Oracle";
+        if (level >= 55) return "Luminary";
+        if (level >= 51) return "Mystic";
+        return "Shaman";
+    case 11: // Necromancer
+        if (level >= 75) return "Deathcaller";
+        if (level >= 70) return "Wraith";
+        if (level >= 65) return "Arch Lich";
+        if (level >= 60) return "Warlock";
+        if (level >= 55) return "Defiler";
+        if (level >= 51) return "Heretic";
+        return "Necromancer";
+    case 12: // Wizard
+        if (level >= 75) return "Pyromancer";
+        if (level >= 70) return "Grand Arcanist";
+        if (level >= 65) return "Arcanist";
+        if (level >= 60) return "Sorcerer";
+        if (level >= 55) return "Evoker";
+        if (level >= 51) return "Channeler";
+        return "Wizard";
+    case 13: // Magician
+        if (level >= 75) return "Grand Summoner";
+        if (level >= 70) return "Arch Magus";
+        if (level >= 65) return "Arch Convoker";
+        if (level >= 60) return "Arch Mage";
+        if (level >= 55) return "Conjurer";
+        if (level >= 51) return "Elementalist";
+        return "Magician";
+    case 14: // Enchanter
+        if (level >= 75) return "Entrancer";
+        if (level >= 70) return "Bedazzler";
+        if (level >= 65) return "Coercer";
+        if (level >= 60) return "Phantasmist";
+        if (level >= 55) return "Beguiler";
+        if (level >= 51) return "Illusionist";
+        return "Enchanter";
+    case 15: // Beastlord
+        if (level >= 75) return "Frostblood";
+        if (level >= 70) return "Wildblood";
+        if (level >= 65) return "Feral Lord";
+        if (level >= 60) return "Savage Lord";
+        if (level >= 55) return "Animist";
+        if (level >= 51) return "Primalist";
+        return "Beastlord";
+    case 16: // Berserker
+        if (level >= 75) return "Juggernaut";
+        if (level >= 70) return "Ravager";
+        if (level >= 65) return "Fury";
+        if (level >= 60) return "Rager";
+        if (level >= 55) return "Vehement";
+        if (level >= 51) return "Brawler";
+        return "Berserker";
+    }
+    return "Unknown";
+}
+
+// Build multiline class title string from bitmask
+static std::string GetClassString()
+{
+    auto it = s_statOverrides.find(eStatClassesBitmask);
+    if (it == s_statOverrides.end())
+        return "";
+
+    uint32_t mask = static_cast<uint32_t>(it->second);
+    if (!mask) return "";
+
+    // Read player level
+    auto* pLocal = GameState::GetLocalPlayer();
+    if (!pLocal) return "";
+
+    int level = *reinterpret_cast<uint8_t*>(
+        reinterpret_cast<uintptr_t>(pLocal) + OFF_SPAWN_LEVEL);
+
+    std::string result;
+    for (int classId = 1; classId <= 16; ++classId)
+    {
+        if (mask & (1u << (classId - 1)))
+        {
+            if (!result.empty())
+                result += "\n";
+            result += GetClassTitle(classId, level);
+        }
+    }
+
+    return result;
+}
 
 // ---------------------------------------------------------------------------
 // Original function typedefs and pointers
@@ -105,14 +296,14 @@ using GetLabelFromEQ_t = bool (__cdecl*)(int labelId, void* pStr, bool* pEnabled
 static GetLabelFromEQ_t GetLabelFromEQ_Original = nullptr;
 
 // ---------------------------------------------------------------------------
-// Helper: 3-tier stat resolution
+// Helper: 3-tier stat resolution (uses server stat keys)
 // ---------------------------------------------------------------------------
-static int ResolveStat(StatType type, int originalValue)
+static int ResolveStat(uint32_t statKey, int originalValue)
 {
     // Tier 1: Server-sent override
-    auto it = s_statOverrides.find(type);
+    auto it = s_statOverrides.find(statKey);
     if (it != s_statOverrides.end())
-        return it->second;
+        return static_cast<int>(it->second);
 
     // Tier 2: Test default when original is 0 (non-caster class)
     if (originalValue == 0)
@@ -129,19 +320,19 @@ static int ResolveStat(StatType type, int originalValue)
 static int __fastcall MaxMana_Detour(void* thisPtr, void* edx, bool bCapAtMax)
 {
     int original = MaxMana_Original(thisPtr, edx, bCapAtMax);
-    return ResolveStat(StatType::MaxMana, original);
+    return ResolveStat(eStatMaxMana, original);
 }
 
 static int __fastcall CurMana_Detour(void* thisPtr, void* edx, bool bCapAtMax)
 {
     int original = CurMana_Original(thisPtr, edx, bCapAtMax);
-    return ResolveStat(StatType::CurMana, original);
+    return ResolveStat(eStatCurMana, original);
 }
 
 static int __fastcall MaxEndurance_Detour(void* thisPtr, void* edx, bool bCapAtMax)
 {
     int original = MaxEndurance_Original(thisPtr, edx, bCapAtMax);
-    return ResolveStat(StatType::MaxEndurance, original);
+    return ResolveStat(eStatMaxEndur, original);
 }
 
 // Gauge types — discovered empirically from EQ client UI.
@@ -157,9 +348,9 @@ static int __cdecl GetGaugeValueFromEQ_Detour(int gaugeType, void* pStr, bool* p
     switch (gaugeType)
     {
     case GAUGE_MANA:
-        return ResolveStat(StatType::CurMana, original);
+        return ResolveStat(eStatCurMana, original);
     case GAUGE_STAMINA:
-        return ResolveStat(StatType::CurEndurance, original);
+        return ResolveStat(eStatCurEndur, original);
     default:
         return original;
     }
@@ -174,14 +365,81 @@ static constexpr int LABEL_ENDUR_VALUE  = 81;
 static constexpr int LABEL_ENDUR_MAX    = 82;
 static constexpr int LABEL_ENDUR_PCT    = 83;
 
+static constexpr int LABEL_CLASS = 3;
+
+// One-shot debug flag — set by /classdebug, logs next label type 3 call
+static bool s_debugNextClassLabel = false;
+
+static void CmdClassDebug(eqlib::PlayerClient* /*pChar*/, const char* /*szLine*/)
+{
+    WriteChatf("--- Class Label Debug ---");
+
+    // Show all stat overrides
+    WriteChatf("  Stat overrides (%d entries):", static_cast<int>(s_statOverrides.size()));
+    for (const auto& [key, val] : s_statOverrides)
+    {
+        if (key == eStatClassesBitmask)
+            WriteChatf("    key[%u] = 0x%08X (class bitmask)", key, static_cast<unsigned int>(val));
+        else
+            WriteChatf("    key[%u] = %lld", key, static_cast<long long>(val));
+    }
+
+    // Show class string result
+    std::string classStr = GetClassString();
+    if (classStr.empty())
+        WriteChatf("  GetClassString() = (empty) — no class bitmask from server");
+    else
+        WriteChatf("  GetClassString() = '%s'", classStr.c_str());
+
+    // Arm one-shot logging for next label type 3
+    s_debugNextClassLabel = true;
+    WriteChatf("  Armed: will log next label type 3 call");
+    WriteChatf("-------------------------");
+}
+
 static bool __cdecl GetLabelFromEQ_Detour(int labelId, void* pStr, bool* pEnabled, unsigned long* pColor)
 {
     bool result = GetLabelFromEQ_Original(labelId, pStr, pEnabled, pColor);
 
-    // Only intervene on mana/endurance labels, and only if the label system
-    // returned a value we can check. The label text is in a CXStr which we
-    // don't modify here — the gauge hooks handle the numeric display.
-    // This hook is reserved for future label text overrides if needed.
+    // Override class label with multiclass titles from server bitmask
+    if (labelId == LABEL_CLASS)
+    {
+        std::string classStr = GetClassString();
+
+        // One-shot debug logging
+        if (s_debugNextClassLabel)
+        {
+            s_debugNextClassLabel = false;
+
+            CStrRep_Raw* rep = *reinterpret_cast<CStrRep_Raw**>(pStr);
+            if (rep)
+            {
+                WriteChatf("ClassLabel: pStr=%p rep=%p encoding=%u alloc=%u len=%u text='%s'",
+                    pStr, rep, rep->encoding, rep->alloc, rep->length,
+                    (rep->encoding == 0 && rep->length > 0) ? rep->utf8 : "(n/a)");
+            }
+            else
+            {
+                WriteChatf("ClassLabel: pStr=%p rep=NULL", pStr);
+            }
+            WriteChatf("ClassLabel: classStr='%s' (len=%d)",
+                classStr.empty() ? "(empty)" : classStr.c_str(),
+                static_cast<int>(classStr.size()));
+        }
+
+        if (!classStr.empty())
+        {
+            // CXStr is a single CStrRep* pointer. pStr points to a CXStr object.
+            CStrRep_Raw* rep = *reinterpret_cast<CStrRep_Raw**>(pStr);
+
+            if (rep && rep->encoding == 0 /* UTF8 */ && rep->alloc > classStr.size())
+            {
+                // Safe in-place modification within existing CStrRep allocation
+                memcpy(rep->utf8, classStr.c_str(), classStr.size() + 1);
+                rep->length = static_cast<uint32_t>(classStr.size());
+            }
+        }
+    }
 
     return result;
 }
@@ -247,12 +505,15 @@ bool StatsOverride::Initialize()
         reinterpret_cast<void**>(&GetLabelFromEQ_Original),
         reinterpret_cast<void*>(&GetLabelFromEQ_Detour));
 
+    Commands::AddCommand("/classdebug", CmdClassDebug);
+
     LogFramework("StatsOverride: Initialized — 5 hooks installed");
     return true;
 }
 
 void StatsOverride::Shutdown()
 {
+    Commands::RemoveCommand("/classdebug");
     s_statOverrides.clear();
     LogFramework("StatsOverride: Shutdown");
 }
@@ -271,12 +532,12 @@ bool StatsOverride::OnIncomingMessage(uint32_t opcode, const void* buffer, uint3
     if (size < sizeof(uint32_t))
     {
         LogFramework("StatsOverride: Received 0x1338 but size too small (%u)", size);
-        return false;  // Suppress malformed packet
+        return false;
     }
 
     auto* pkt = reinterpret_cast<const EdgeStat_Struct*>(buffer);
 
-    // Validate that the packet contains enough data for all entries
+    // Validate: count * sizeof(EdgeStatEntry) should equal (size - 4)
     size_t expectedSize = sizeof(uint32_t) + pkt->count * sizeof(EdgeStatEntry);
     if (size < expectedSize)
     {
@@ -285,16 +546,20 @@ bool StatsOverride::OnIncomingMessage(uint32_t opcode, const void* buffer, uint3
         return false;
     }
 
-    LogFramework("StatsOverride: Received %u stat overrides from server", pkt->count);
+    LogFramework("StatsOverride: Received %u stat entries from server", pkt->count);
 
     for (uint32_t i = 0; i < pkt->count; ++i)
     {
-        auto type = static_cast<StatType>(pkt->entries[i].statType);
-        int  val  = pkt->entries[i].value;
+        uint32_t key = pkt->entries[i].statKey;
+        uint64_t val = pkt->entries[i].statValue;
 
-        s_statOverrides[type] = val;
-        LogFramework("StatsOverride:   stat[%u] = %d", pkt->entries[i].statType, val);
+        s_statOverrides[key] = val;
+
+        if (key == eStatClassesBitmask)
+            LogFramework("StatsOverride:   key[%u] = 0x%08X (class bitmask)", key, static_cast<unsigned int>(val));
+        else
+            LogFramework("StatsOverride:   key[%u] = %lld", key, static_cast<long long>(val));
     }
 
-    return false;  // Suppress — don't pass unknown opcode to original handler
+    return false;  // Suppress — custom opcode
 }
