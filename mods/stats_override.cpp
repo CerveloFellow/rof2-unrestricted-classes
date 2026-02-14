@@ -683,6 +683,30 @@ static unsigned char __fastcall GetSpellLevelNeeded_Detour(
 // server bitmask when available, or "Hero" as a fallback (matching original
 // THJ client behavior).
 // ---------------------------------------------------------------------------
+// Helper: build "WAR/CLR/MAG" abbreviation string from a class bitmask
+static bool BuildClassAbbrFromMask(uint32_t mask, char* buf, size_t bufSize)
+{
+    buf[0] = '\0';
+    size_t pos = 0;
+    for (int cid = 1; cid <= 16; ++cid)
+    {
+        if (mask & (1u << (cid - 1)))
+        {
+            if (pos > 0 && pos + 1 < bufSize)
+                buf[pos++] = '/';
+            const char* abbr = ClassAbbr[cid];
+            size_t alen = strlen(abbr);
+            if (pos + alen < bufSize)
+            {
+                memcpy(buf + pos, abbr, alen);
+                pos += alen;
+            }
+        }
+    }
+    buf[pos] = '\0';
+    return pos > 0;
+}
+
 static char* __fastcall GetClassDesc_Detour(void* thisPtr, void* edx, int classId)
 {
     // Standard classes 1-16: let the original function handle them
@@ -690,37 +714,26 @@ static char* __fastcall GetClassDesc_Detour(void* thisPtr, void* edx, int classI
         return GetClassDesc_Original(thisPtr, edx, classId);
 
     // Non-standard class ID (multiclass character)
-    // Try to build abbreviated class string from server bitmask
+    // Priority 1: OP_EdgeStats bitmask (available after zoning in)
     auto it = s_statOverrides.find(eStatClassesBitmask);
-    if (it != s_statOverrides.end())
+    if (it != s_statOverrides.end() && it->second != 0)
     {
         uint32_t mask = static_cast<uint32_t>(it->second);
-        if (mask)
-        {
-            s_classDescBuffer[0] = '\0';
-            size_t pos = 0;
-            for (int cid = 1; cid <= 16; ++cid)
-            {
-                if (mask & (1u << (cid - 1)))
-                {
-                    if (pos > 0 && pos + 1 < sizeof(s_classDescBuffer))
-                        s_classDescBuffer[pos++] = '/';
-                    const char* abbr = ClassAbbr[cid];
-                    size_t alen = strlen(abbr);
-                    if (pos + alen < sizeof(s_classDescBuffer))
-                    {
-                        memcpy(s_classDescBuffer + pos, abbr, alen);
-                        pos += alen;
-                    }
-                }
-            }
-            s_classDescBuffer[pos] = '\0';
-            if (pos > 0)
-                return s_classDescBuffer;
-        }
+        if (BuildClassAbbrFromMask(mask, s_classDescBuffer, sizeof(s_classDescBuffer)))
+            return s_classDescBuffer;
     }
 
-    // Fallback: "Hero" (matches original THJ client)
+    // Priority 2: Encoded bitmask from character select packet
+    // Server sends (classBitmask + 1000) in the class field.
+    // Any classId >= 1000 is an encoded bitmask — subtract 1000 and decode.
+    if (classId >= 1000)
+    {
+        uint32_t mask = static_cast<uint32_t>(classId - 1000);
+        if (BuildClassAbbrFromMask(mask, s_classDescBuffer, sizeof(s_classDescBuffer)))
+            return s_classDescBuffer;
+    }
+
+    // Fallback: "Hero" (classId 17-999, including current server sentinel 255)
     strcpy_s(s_classDescBuffer, "Hero");
     return s_classDescBuffer;
 }
