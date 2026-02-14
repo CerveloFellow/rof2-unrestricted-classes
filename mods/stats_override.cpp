@@ -45,6 +45,7 @@ extern "C" uintptr_t EQGameBaseAddress;
 #define __GetGaugeValueFromEQ_x               0x762410
 #define __GetLabelFromEQ_x                    0x763640
 #define EQ_Spell__GetSpellLevelNeeded_x        0x4AF700
+#define CEverQuest__GetClassDesc_x             0x514DC0
 #define __eq_new_x                            0x8DBB3B
 #define __eq_delete_x                         0x8DB146
 #define CXStr__gFreeLists_x                   0xB618A0
@@ -438,6 +439,14 @@ static GetSpellLevelNeeded_t GetSpellLevelNeeded_Original = nullptr;
 // Offset of ClassLevel[MAX_CLASSES+1] array within EQ_Spell struct (uint8_t per class, 1-based index)
 static constexpr uint32_t OFF_SPELL_CLASS_LEVEL = 0x246;
 
+// CEverQuest::GetClassDesc: char* __thiscall(int classId)
+// Returns the display name for a class ID (e.g., "Warrior", "Cleric")
+using GetClassDesc_t = char* (__fastcall*)(void* thisPtr, void* edx, int classId);
+static GetClassDesc_t GetClassDesc_Original = nullptr;
+
+// Static buffer for our custom class description string
+static char s_classDescBuffer[256] = {};
+
 // ---------------------------------------------------------------------------
 // Helper: 3-tier stat resolution (uses server stat keys)
 // ---------------------------------------------------------------------------
@@ -666,6 +675,57 @@ static unsigned char __fastcall GetSpellLevelNeeded_Detour(
 }
 
 // ---------------------------------------------------------------------------
+// GetClassDesc detour — multiclass class name on character select screen
+//
+// The client calls GetClassDesc(classId) to get the display name for a class.
+// Multiclass characters have a non-standard class ID (not 1-16), causing
+// "Unknown Class". This detour returns abbreviated class names from the
+// server bitmask when available, or "Hero" as a fallback (matching original
+// THJ client behavior).
+// ---------------------------------------------------------------------------
+static char* __fastcall GetClassDesc_Detour(void* thisPtr, void* edx, int classId)
+{
+    // Standard classes 1-16: let the original function handle them
+    if (classId >= 1 && classId <= 16)
+        return GetClassDesc_Original(thisPtr, edx, classId);
+
+    // Non-standard class ID (multiclass character)
+    // Try to build abbreviated class string from server bitmask
+    auto it = s_statOverrides.find(eStatClassesBitmask);
+    if (it != s_statOverrides.end())
+    {
+        uint32_t mask = static_cast<uint32_t>(it->second);
+        if (mask)
+        {
+            s_classDescBuffer[0] = '\0';
+            size_t pos = 0;
+            for (int cid = 1; cid <= 16; ++cid)
+            {
+                if (mask & (1u << (cid - 1)))
+                {
+                    if (pos > 0 && pos + 1 < sizeof(s_classDescBuffer))
+                        s_classDescBuffer[pos++] = '/';
+                    const char* abbr = ClassAbbr[cid];
+                    size_t alen = strlen(abbr);
+                    if (pos + alen < sizeof(s_classDescBuffer))
+                    {
+                        memcpy(s_classDescBuffer + pos, abbr, alen);
+                        pos += alen;
+                    }
+                }
+            }
+            s_classDescBuffer[pos] = '\0';
+            if (pos > 0)
+                return s_classDescBuffer;
+        }
+    }
+
+    // Fallback: "Hero" (matches original THJ client)
+    strcpy_s(s_classDescBuffer, "Hero");
+    return s_classDescBuffer;
+}
+
+// ---------------------------------------------------------------------------
 // IMod interface
 // ---------------------------------------------------------------------------
 
@@ -710,6 +770,11 @@ bool StatsOverride::Initialize()
     GetSpellLevelNeeded_Original = reinterpret_cast<GetSpellLevelNeeded_t>(spellLevelAddr);
     LogFramework("StatsOverride: GetSpellLevelNeeded = 0x%08X", static_cast<unsigned int>(spellLevelAddr));
 
+    uintptr_t classDescAddr = static_cast<uintptr_t>(CEverQuest__GetClassDesc_x)
+        - eqlib::EQGamePreferredAddress + EQGameBaseAddress;
+    GetClassDesc_Original = reinterpret_cast<GetClassDesc_t>(classDescAddr);
+    LogFramework("StatsOverride: GetClassDesc = 0x%08X", static_cast<unsigned int>(classDescAddr));
+
     // --- Resolve game allocator for CXStr text replacement ---
     s_eqAlloc = reinterpret_cast<EqAllocFn>(
         static_cast<uintptr_t>(__eq_new_x) - eqlib::EQGamePreferredAddress + EQGameBaseAddress);
@@ -747,9 +812,13 @@ bool StatsOverride::Initialize()
         reinterpret_cast<void**>(&GetSpellLevelNeeded_Original),
         reinterpret_cast<void*>(&GetSpellLevelNeeded_Detour));
 
+    Hooks::Install("GetClassDesc",
+        reinterpret_cast<void**>(&GetClassDesc_Original),
+        reinterpret_cast<void*>(&GetClassDesc_Detour));
+
     Commands::AddCommand("/classdebug", CmdClassDebug);
 
-    LogFramework("StatsOverride: Initialized — 6 hooks installed");
+    LogFramework("StatsOverride: Initialized — 7 hooks installed");
     return true;
 }
 
