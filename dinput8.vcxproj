@@ -16,9 +16,6 @@
     <ProjectGuid>{cc75bdd5-2625-436b-92ae-4d31a8d314f0}</ProjectGuid>
     <RootNamespace>dinput8</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <VcpkgTriplet>x86-windows-static</VcpkgTriplet>
-    <VcpkgEnableManifest>true</VcpkgEnableManifest>
-    <VcpkgRoot>$(MSBuildProjectDirectory)\vcpkg\</VcpkgRoot>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -104,6 +101,14 @@
     <ClInclude Include="mods\spellbook_unlock.h" />
     <ClInclude Include="mods\combat_abilities.h" />
     <ClInclude Include="mods\stats_override.h" />
+    <ClInclude Include="mods\pyrelight_patches.h" />
+    <ClInclude Include="mods\version_check.h" />
+    <ClInclude Include="mods\cpu_speed_fix.h" />
+    <ClInclude Include="mods\race_injection.h" />
+    <ClInclude Include="mods\zone_injection.h" />
+    <ClInclude Include="mods\mq2_prevention.h" />
+    <ClInclude Include="mods\exception_fix.h" />
+    <ClInclude Include="mods\who_multiclass.h" />
     <ClInclude Include="game_state.h" />
     <ClInclude Include="commands.h" />
   </ItemGroup>
@@ -114,6 +119,14 @@
     <ClCompile Include="mods\spellbook_unlock.cpp" />
     <ClCompile Include="mods\combat_abilities.cpp" />
     <ClCompile Include="mods\stats_override.cpp" />
+    <ClCompile Include="mods\pyrelight_patches.cpp" />
+    <ClCompile Include="mods\version_check.cpp" />
+    <ClCompile Include="mods\cpu_speed_fix.cpp" />
+    <ClCompile Include="mods\race_injection.cpp" />
+    <ClCompile Include="mods\zone_injection.cpp" />
+    <ClCompile Include="mods\mq2_prevention.cpp" />
+    <ClCompile Include="mods\exception_fix.cpp" />
+    <ClCompile Include="mods\who_multiclass.cpp" />
     <ClCompile Include="game_state.cpp" />
     <ClCompile Include="commands.cpp" />
     <ClCompile Include="pch.cpp">
