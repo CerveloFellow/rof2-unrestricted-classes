@@ -2066,8 +2066,8 @@
 		<Style_HScroll>false</Style_HScroll>
 		<Style_Transparent>false</Style_Transparent>
 		<FillTint>
-			<R>0</R>
-			<G>200</G>
+			<R>240</R>
+			<G>0</G>
 			<B>0</B>
 		</FillTint>
 		<LinesFillTint>
@@ -2111,8 +2111,8 @@
 		<Style_HScroll>false</Style_HScroll>
 		<Style_Transparent>false</Style_Transparent>
 		<FillTint>
-			<R>0</R>
-			<G>200</G>
+			<R>240</R>
+			<G>0</G>
 			<B>0</B>
 		</FillTint>
 		<LinesFillTint>

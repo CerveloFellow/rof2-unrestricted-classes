@@ -20,6 +20,8 @@
 #include "../game_state.h"
 #include "../commands.h"
 
+#include <eqlib/Offsets.h>
+
 #include <cstdint>
 #include <cstring>
 #include <algorithm>
@@ -31,6 +33,17 @@ static constexpr uint32_t OFF_SPAWN_NAME      = 0x0A4;  // PlayerBase::Name (cha
 static constexpr uint32_t OFF_SPAWN_ID        = 0x148;  // PlayerBase::SpawnID (uint32)
 static constexpr uint32_t OFF_SPAWN_PET_ID    = 0x2B4;  // PlayerZoneClient::PetID (int)
 static constexpr uint32_t OFF_SPAWN_MASTER_ID = 0x38C;  // PlayerZoneClient::MasterID (uint32)
+static constexpr uint32_t OFF_SPAWN_NEXT      = 0x04;   // TListNode<PlayerClient>::m_pNext
+
+// PlayerManagerClient virtual method offsets
+// GetSpawnByID: thiscall, takes int spawnID, returns PlayerClient* (or nullptr)
+static constexpr uint32_t RAW_GET_SPAWN_BY_ID = 0x5996E0;
+// PlayerManagerClient + 0x04 = NextID (next spawn ID that will be assigned)
+static constexpr uint32_t OFF_MGR_NEXT_ID     = 0x04;
+
+// GetSpawnByID function pointer (resolved at init)
+using GetSpawnByID_t = void*(__fastcall*)(void* thisPtr, void* edx, int id);
+static GetSpawnByID_t s_GetSpawnByID = nullptr;
 
 // PcClient offset
 static constexpr uint32_t OFF_PC_XTARGET_LIST = 0x31B8; // PcClient::pExtendedTargetList
@@ -58,9 +71,11 @@ static constexpr uint32_t OP_XTargetResponse = 0x4D59;
 static constexpr uint32_t OP_PetList         = 0x1339;
 
 // ---------------------------------------------------------------------------
-// Static instance pointer for command callbacks
+// Static instance pointer for command callbacks and cross-mod access
 // ---------------------------------------------------------------------------
 static MultiPet* s_instance = nullptr;
+
+MultiPet* MultiPet::GetInstance() { return s_instance; }
 
 // ---------------------------------------------------------------------------
 // Spawn field helpers
@@ -184,6 +199,11 @@ bool MultiPet::Initialize()
 
     s_instance = this;
 
+    // Resolve GetSpawnByID game function
+    uintptr_t gsbiAddr = eqlib::FixEQGameOffset(RAW_GET_SPAWN_BY_ID);
+    s_GetSpawnByID = reinterpret_cast<GetSpawnByID_t>(gsbiAddr);
+    LogFramework("MultiPet: GetSpawnByID = 0x%08X", static_cast<unsigned int>(gsbiAddr));
+
     Commands::AddCommand("/pets", CmdPets);
     Commands::AddCommand("/petcycle", CmdPetCycle);
     Commands::AddCommand("/petdebug", CmdPetDebug);
@@ -275,6 +295,13 @@ void MultiPet::OnPulse()
         ClearAllTracking();
     }
     m_localSpawnID = currentLocalID;
+
+    // Rebuild spawn map if empty (e.g. after zone-in or DLL loaded mid-session)
+    if (m_spawnMap.empty())
+    {
+        RebuildSpawnMap();
+        ScanForPets();
+    }
 
     // Periodic scan for pets we may have missed (MasterID set after spawn)
     if (++m_scanCounter >= 120)
@@ -478,6 +505,33 @@ void MultiPet::TryTrackPet(void* pSpawn, uint32_t spawnID)
     LogFramework("MultiPet: Detected pet '%s' (ID %u) via MasterID", pet.name, spawnID);
 }
 
+void MultiPet::RebuildSpawnMap()
+{
+    if (!s_GetSpawnByID) return;
+
+    auto* mgr = reinterpret_cast<void*>(GameState::GetSpawnManager());
+    if (!mgr) return;
+
+    // Read NextID from PlayerManagerClient (+0x04) — upper bound for spawn IDs
+    uint32_t nextID = *reinterpret_cast<uint32_t*>(
+        reinterpret_cast<uintptr_t>(mgr) + OFF_MGR_NEXT_ID);
+    if (nextID == 0 || nextID > 10000) nextID = 1000;  // safety cap
+
+    int count = 0;
+    for (uint32_t id = 1; id < nextID; ++id)
+    {
+        void* pSpawn = s_GetSpawnByID(mgr, nullptr, static_cast<int>(id));
+        if (pSpawn)
+        {
+            m_spawnMap[id] = pSpawn;
+            count++;
+        }
+    }
+
+    LogFramework("MultiPet: Rebuilt spawn map via GetSpawnByID — %d spawns (scanned 1-%u)",
+        count, nextID - 1);
+}
+
 void MultiPet::ScanForPets()
 {
     auto* pLocal = GameState::GetLocalPlayer();
@@ -486,6 +540,7 @@ void MultiPet::ScanForPets()
     uint32_t localID = GetSpawnID(pLocal);
     int uiPetID = GetPetID(pLocal);
 
+    // Scan the spawn map (populated by OnAddSpawn + RebuildSpawnMap)
     for (const auto& [sid, pSpawn] : m_spawnMap)
     {
         if (!pSpawn) continue;
@@ -506,7 +561,7 @@ void MultiPet::ScanForPets()
         strncpy_s(pet.name, GetSpawnName(pSpawn), _TRUNCATE);
 
         m_pets.push_back(pet);
-        LogFramework("MultiPet: Detected pet '%s' (ID %u) via periodic scan", pet.name, sid);
+        LogFramework("MultiPet: Detected pet '%s' (ID %u) via scan", pet.name, sid);
     }
 }
 
@@ -817,6 +872,29 @@ void MultiPet::DebugSpawns()
     else
     {
         WriteChatf("  XTarget list: NULL");
+    }
+
+    // Scan spawns via GetSpawnByID for diagnostics
+    WriteChatf("  --- Spawn Scan (GetSpawnByID) ---");
+    if (s_GetSpawnByID)
+    {
+        auto* mgr = reinterpret_cast<void*>(GameState::GetSpawnManager());
+        uint32_t nextID = mgr ? *reinterpret_cast<uint32_t*>(
+            reinterpret_cast<uintptr_t>(mgr) + OFF_MGR_NEXT_ID) : 0;
+        WriteChatf("    NextID=%u, SpawnMap size=%d", nextID, (int)m_spawnMap.size());
+
+        // Show all spawns with MasterID matching local player
+        for (const auto& [sid, sp] : m_spawnMap)
+        {
+            if (!sp) continue;
+            uint32_t master = GetMasterID(sp);
+            if (master == localID)
+            {
+                WriteChatf("    ID=%u '%s' master=%u %s",
+                    sid, GetSpawnName(sp), master,
+                    (static_cast<int>(sid) == uiPetID) ? "(UI pet)" : "(secondary)");
+            }
+        }
     }
 
     WriteChatf("----------------------");

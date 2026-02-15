@@ -53,13 +53,17 @@ public:
     void CyclePet();
     void DebugSpawns();
 
-private:
+    // Accessor for other mods (e.g. PetWindow)
+    static MultiPet* GetInstance();
+    const std::vector<TrackedPet>& GetTrackedPets() const { return m_pets; }
+
     void ClearAllTracking();
     void PopulateXTargetSlots();
     void ClearXTargetSlot(int slotIndex);
     void ResolvePetSpawns();
     void TryTrackPet(void* pSpawn, uint32_t spawnID);
     void ScanForPets();
+    void RebuildSpawnMap();
 
     // Tracked secondary pets (from MasterID detection or OP_PetList)
     std::vector<TrackedPet>  m_pets;

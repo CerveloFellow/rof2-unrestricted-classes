@@ -1,8 +1,9 @@
 /**
  * @file pet_window.h
- * @brief PetWindow mod — POC for multi-pet display in the Pet Info Window.
+ * @brief PetWindow mod — multi-pet display in the Pet Info Window.
  *
- * Phase 1: Find the CPetInfoWnd instance by scanning CXWndManager's window list.
+ * Phases 1-4: Find pet window, walk children, layout via XML, cache gauges.
+ * Phase 5: Update gauge values (pet name + HP fill) from MultiPet data.
  *
  * @date 2026-02-14
  */
@@ -33,8 +34,16 @@ public:
     // Phase 4: Find gauge widgets for secondary pets
     void  CreateGauge();
 
+    // Phase 5 debug: dump HP values
+    void  DebugHP();
+
 private:
+    // Phase 5: Update a gauge with pet name and HP percentage
+    void  UpdateGauge(void* gauge, const char* petName, int hpPercent);
+
     void* m_petInfoWnd = nullptr;
     void* m_newGauge1 = nullptr;
     void* m_newGauge2 = nullptr;
+    bool  m_initialized = false;   // true after auto-init succeeds
+    int   m_initCounter = 0;       // pulse counter for delayed init
 };
