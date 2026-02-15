@@ -30,15 +30,11 @@ public:
     // Phase 2: Walk child widget tree
     void  DebugChildren();
 
-    // Phase 3: Move buttons down to make room
-    void  MoveButtons();
-
-    // Phase 4: Create gauge widgets for secondary pets
+    // Phase 4: Find gauge widgets for secondary pets
     void  CreateGauge();
 
 private:
     void* m_petInfoWnd = nullptr;
-    bool  m_buttonsMoved = false;
     void* m_newGauge1 = nullptr;
     void* m_newGauge2 = nullptr;
 };

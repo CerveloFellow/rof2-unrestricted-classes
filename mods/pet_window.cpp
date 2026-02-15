@@ -71,9 +71,6 @@ static constexpr uint32_t VFTABLE_CGaugeWnd  = 0x9E87A8;
 static constexpr uint32_t VFTABLE_CButtonWnd = 0xA1B41C;
 static constexpr uint32_t VFTABLE_CXWnd      = 0xA19C74;
 
-// Phase 3: pixels to shift buttons down (2 pet rows × ~26px each)
-static constexpr int SHIFT_PIXELS = 52;
-
 // CXWnd vtable offsets
 static constexpr uint32_t VTOFF_UPDATEGEOMETRY = 0x11C;
 static constexpr uint32_t VTOFF_SETWINDOWTEXT  = 0x124;
@@ -254,11 +251,6 @@ static void CmdPetWinDebug(eqlib::PlayerClient* /*pChar*/, const char* szLine)
         if (_strnicmp(szLine, "children", 8) == 0)
         {
             s_instance->DebugChildren();
-            return;
-        }
-        if (_strnicmp(szLine, "move", 4) == 0)
-        {
-            s_instance->MoveButtons();
             return;
         }
         if (_strnicmp(szLine, "create", 6) == 0)
@@ -517,128 +509,6 @@ void PetWindow::DebugChildren()
 }
 
 // ---------------------------------------------------------------------------
-// Phase 3: Move buttons down to make room for 2 additional pet rows
-// ---------------------------------------------------------------------------
-// Pet window layout (from Phase 2):
-//   [0] Gauge  108x26 @(2,0)   "pet name/HP"
-//   [1] Gauge  108x28 @(2,32)  "pet target HP"
-//   [2-15] Buttons starting @y=69
-//   [16] BuffWindow
-//
-// We shift children [2..16] down by SHIFT_PIXELS to make room for
-// 2 additional pet name+HP gauge rows between y=60 and y=69.
-// SHIFT_PIXELS defined at top of file
-
-void PetWindow::MoveButtons()
-{
-    WriteChatf("--- PetWindow Phase 3: Move ---");
-
-    if (!m_petInfoWnd)
-        m_petInfoWnd = FindPetInfoWnd();
-
-    if (!m_petInfoWnd)
-    {
-        WriteChatf("\ar  PetInfoWindow not found.");
-        return;
-    }
-
-    if (m_buttonsMoved)
-    {
-        WriteChatf("\ay  Buttons already moved. Relog to reset.");
-        return;
-    }
-
-    // Walk children, shift [2+] down
-    uintptr_t child = 0;
-    if (!SafeReadPtr((uintptr_t)m_petInfoWnd + OFF_CXWND_FIRST_CHILD, child) || !IsValidPtr(child))
-    {
-        WriteChatf("\ar  No children found.");
-        return;
-    }
-
-    // UpdateGeometry vtable call
-    typedef int (__fastcall *UpdateGeometry_t)(void* thisPtr, void* edx,
-        const CXRect* rect, bool updateLayout, bool forceUpdateLayout,
-        bool completeMoveOrResize, bool moveAutoStretch);
-
-    // First, grow the parent pet window
-    __try
-    {
-        CXRect wndRect;
-        wndRect.left   = *(int*)((uintptr_t)m_petInfoWnd + OFF_CXWND_LOCATION + 0x00);
-        wndRect.top    = *(int*)((uintptr_t)m_petInfoWnd + OFF_CXWND_LOCATION + 0x04);
-        wndRect.right  = *(int*)((uintptr_t)m_petInfoWnd + OFF_CXWND_LOCATION + 0x08);
-        wndRect.bottom = *(int*)((uintptr_t)m_petInfoWnd + OFF_CXWND_LOCATION + 0x0C);
-
-        CXRect newWndRect = { wndRect.left, wndRect.top, wndRect.right,
-                              wndRect.bottom + SHIFT_PIXELS };
-
-        uintptr_t vtable = *(uintptr_t*)((uintptr_t)m_petInfoWnd);
-        auto fn = (UpdateGeometry_t)(*(uintptr_t*)(vtable + VTOFF_UPDATEGEOMETRY));
-        fn(m_petInfoWnd, nullptr, &newWndRect, true, true, true, false);
-
-        WriteChatf("  Parent window grown: bottom %d -> %d", wndRect.bottom, newWndRect.bottom);
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER)
-    {
-        WriteChatf("\ar  Exception resizing parent window!");
-    }
-
-    // Walk children, shift non-gauge children down using UpdateGeometry vtable call
-    // Skip all CGaugeWnd children (pet HP, target HP, and our new pet 2/3 gauges)
-    uintptr_t eqBase = (uintptr_t)GetModuleHandleA("eqgame.exe");
-    int idx = 0;
-    int movedCount = 0;
-
-    while (IsValidPtr(child) && idx < 200)
-    {
-        // Check vtable to identify gauges - skip them
-        uint32_t rawVt = 0;
-        uintptr_t vt = 0;
-        SafeReadPtr(child + OFF_CXWND_VTABLE, vt);
-        rawVt = (uint32_t)(vt - eqBase + 0x400000);
-
-        if (rawVt != VFTABLE_CGaugeWnd) // skip gauges, shift everything else
-        {
-            __try
-            {
-                CXRect rect;
-                rect.left   = *(int*)(child + OFF_CXWND_LOCATION + 0x00);
-                rect.top    = *(int*)(child + OFF_CXWND_LOCATION + 0x04);
-                rect.right  = *(int*)(child + OFF_CXWND_LOCATION + 0x08);
-                rect.bottom = *(int*)(child + OFF_CXWND_LOCATION + 0x0C);
-
-                CXRect newRect = { rect.left, rect.top + SHIFT_PIXELS,
-                                   rect.right, rect.bottom + SHIFT_PIXELS };
-
-                uintptr_t vtable = *(uintptr_t*)child;
-                auto fn = (UpdateGeometry_t)(*(uintptr_t*)(vtable + VTOFF_UPDATEGEOMETRY));
-                fn((void*)child, nullptr, &newRect, true, false, true, false);
-                movedCount++;
-
-                LogFramework("PetWindow: child[%d] UpdateGeometry y %d -> %d",
-                             idx, rect.top, newRect.top);
-            }
-            __except (EXCEPTION_EXECUTE_HANDLER)
-            {
-                WriteChatf("\ar  Exception moving child[%d]!", idx);
-            }
-        }
-
-        // Next sibling
-        uintptr_t next = 0;
-        if (!SafeReadPtr(child + OFF_CXWND_NEXT_SIBLING, next)) break;
-        child = next;
-        idx++;
-    }
-
-    m_buttonsMoved = true;
-    WriteChatf("\ag  Moved %d children via UpdateGeometry() vtable call", movedCount);
-    WriteChatf("  Use '/petwindebug children' to verify positions");
-    WriteChatf("-------------------------------");
-}
-
-// ---------------------------------------------------------------------------
 // Phase 4: Find and verify the XML-created gauge widgets
 // ---------------------------------------------------------------------------
 // The SIDL XML (EQUI_PetInfoWindow.xml) now defines PIW_Pet2HPGauge and
@@ -725,3 +595,4 @@ void PetWindow::CreateGauge()
 
     WriteChatf("-------------------------------");
 }
+
