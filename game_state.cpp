@@ -74,6 +74,12 @@ eqlib::PlayerClient* GetTarget()
     return *reinterpret_cast<eqlib::PlayerClient**>(s_pTarget);
 }
 
+void SetTarget(eqlib::PlayerClient* pSpawn)
+{
+    if (!s_pTarget) return;
+    *reinterpret_cast<eqlib::PlayerClient**>(s_pTarget) = pSpawn;
+}
+
 eqlib::PlayerClient* GetControlledPlayer()
 {
     if (!s_pControlledPlayer) return nullptr;

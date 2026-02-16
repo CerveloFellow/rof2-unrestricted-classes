@@ -817,6 +817,79 @@ void MultiPet::CyclePet()
 }
 
 // ---------------------------------------------------------------------------
+// SwapToPet — promote a specific secondary pet (by SpawnID) to the UI slot
+// ---------------------------------------------------------------------------
+
+void MultiPet::SwapToPet(uint32_t spawnID)
+{
+    auto* pLocal = GameState::GetLocalPlayer();
+    if (!pLocal)
+    {
+        WriteChatf("MultiPet: Not in game.");
+        return;
+    }
+
+    // Verify the target pet is actually tracked
+    auto it = std::find_if(m_pets.begin(), m_pets.end(),
+        [spawnID](const TrackedPet& p) { return p.spawnID == spawnID; });
+
+    if (it == m_pets.end())
+    {
+        WriteChatf("MultiPet: Pet ID %u not found in tracked pets.", spawnID);
+        return;
+    }
+
+    int uiPetID = GetPetID(pLocal);
+
+    // Move current UI pet into secondary tracking
+    if (uiPetID > 0)
+    {
+        bool alreadyTracked = false;
+        for (const auto& pet : m_pets)
+        {
+            if (pet.spawnID == static_cast<uint32_t>(uiPetID)) { alreadyTracked = true; break; }
+        }
+
+        if (!alreadyTracked)
+        {
+            TrackedPet tracked;
+            tracked.spawnID = static_cast<uint32_t>(uiPetID);
+
+            auto mapIt = m_spawnMap.find(tracked.spawnID);
+            if (mapIt != m_spawnMap.end())
+            {
+                tracked.pSpawn = mapIt->second;
+                strncpy_s(tracked.name, GetSpawnName(tracked.pSpawn), _TRUNCATE);
+            }
+
+            m_pets.push_back(tracked);
+        }
+    }
+
+    // Re-find iterator after push_back (may have invalidated)
+    it = std::find_if(m_pets.begin(), m_pets.end(),
+        [spawnID](const TrackedPet& p) { return p.spawnID == spawnID; });
+
+    if (it == m_pets.end()) return;  // shouldn't happen
+
+    // Clear target pet's XTarget slot before removing
+    if (it->xtSlot >= 0)
+        ClearXTargetSlot(it->xtSlot);
+
+    m_pets.erase(it);
+
+    // Set new UI pet
+    SetPetID(pLocal, static_cast<int>(spawnID));
+
+    const char* newPetName = "Unknown";
+    auto mapIt = m_spawnMap.find(spawnID);
+    if (mapIt != m_spawnMap.end())
+        newPetName = GetSpawnName(mapIt->second);
+
+    WriteChatf("MultiPet: Pet window now showing '%s' (ID %u)", newPetName, spawnID);
+}
+
+// ---------------------------------------------------------------------------
 // /petdebug command
 // ---------------------------------------------------------------------------
 

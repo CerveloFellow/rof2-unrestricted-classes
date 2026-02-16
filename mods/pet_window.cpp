@@ -16,6 +16,7 @@
 #include "../core.h"
 #include "../game_state.h"
 #include "../commands.h"
+#include "../hooks.h"
 
 #include <eqlib/Offsets.h>
 #include <eqlib/offsets/eqgame.h>
@@ -92,6 +93,15 @@ static constexpr uint32_t OFF_GAUGE_USETARGETVAL    = 0x23C;  // bool
 static constexpr uint32_t RAW_LABELCACHE            = 0xF74AB0;
 static constexpr uint32_t OFF_LC_XTARGET_HP_PCT     = 0x8F4;
 static constexpr int       MAX_XTARGET_SLOTS        = 20;
+
+// Phase 6: CGaugeWnd::HandleLButtonUp detour
+// HandleLButtonUp is at vtable offset 0x03C (virtual index 15)
+static constexpr uint32_t VTOFF_HANDLELBUTTONUP = 0x03C;
+
+// thiscall: int CGaugeWnd::HandleLButtonUp(const CXPoint& pt, uint32_t flags)
+using GaugeHandleLButtonUp_t = int(__fastcall*)(void* thisPtr, void* edx,
+                                                 const void* pt, uint32_t flags);
+static GaugeHandleLButtonUp_t s_originalGaugeHandleLButtonUp = nullptr;
 
 // ---------------------------------------------------------------------------
 // Strip trailing digits from EQ pet names (e.g. "Kasarn000" -> "Kasarn")
@@ -322,6 +332,7 @@ bool PetWindow::Initialize()
 
 void PetWindow::Shutdown()
 {
+    RemoveGaugeClickHook();
     Commands::RemoveCommand("/petwindebug");
     s_instance = nullptr;
     m_petInfoWnd = nullptr;
@@ -346,6 +357,7 @@ void PetWindow::OnPulse()
         if (m_newGauge1 && m_newGauge2)
         {
             m_initialized = true;
+            InstallGaugeClickHook();
             LogFramework("PetWindow: Auto-initialized — gauges cached");
         }
         return;
@@ -427,6 +439,7 @@ bool PetWindow::OnIncomingMessage(uint32_t, const void*, uint32_t) { return true
 
 void PetWindow::OnSetGameState(int)
 {
+    RemoveGaugeClickHook();
     m_petInfoWnd = nullptr;
     m_newGauge1 = nullptr;
     m_newGauge2 = nullptr;
@@ -815,6 +828,98 @@ void PetWindow::DebugHP()
     }
 
     WriteChatf("-------------------------------");
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6: CGaugeWnd::HandleLButtonUp detour
+// ---------------------------------------------------------------------------
+
+static int __fastcall GaugeHandleLButtonUp_Detour(void* thisPtr, void* edx,
+                                                    const void* pt, uint32_t flags)
+{
+    // Check if this click landed on one of our pet gauges
+    if (s_instance)
+    {
+        auto* multiPet = MultiPet::GetInstance();
+        if (multiPet)
+        {
+            const auto& pets = multiPet->GetTrackedPets();
+
+            if (thisPtr == s_instance->GetGauge1())
+            {
+                if (pets.size() >= 1)
+                {
+                    GameState::SetTarget(
+                        reinterpret_cast<eqlib::PlayerClient*>(pets[0].pSpawn));
+                    multiPet->SwapToPet(pets[0].spawnID);
+                }
+                else
+                    WriteChatf("PetWindow: No pet tracked in slot 2.");
+                return 0;  // swallow click
+            }
+
+            if (thisPtr == s_instance->GetGauge2())
+            {
+                if (pets.size() >= 2)
+                {
+                    GameState::SetTarget(
+                        reinterpret_cast<eqlib::PlayerClient*>(pets[1].pSpawn));
+                    multiPet->SwapToPet(pets[1].spawnID);
+                }
+                else
+                    WriteChatf("PetWindow: No pet tracked in slot 3.");
+                return 0;  // swallow click
+            }
+        }
+    }
+
+    // Not our gauge — pass through to original handler
+    return s_originalGaugeHandleLButtonUp(thisPtr, edx, pt, flags);
+}
+
+void PetWindow::InstallGaugeClickHook()
+{
+    if (m_hookInstalled) return;
+
+    // Read HandleLButtonUp address from CGaugeWnd vtable
+    uintptr_t eqBase = (uintptr_t)GetModuleHandleA("eqgame.exe");
+    uintptr_t gaugeVtable = (VFTABLE_CGaugeWnd - 0x400000) + eqBase;
+
+    __try
+    {
+        uintptr_t funcAddr = *(uintptr_t*)(gaugeVtable + VTOFF_HANDLELBUTTONUP);
+        if (!IsValidPtr(funcAddr))
+        {
+            LogFramework("PetWindow: HandleLButtonUp address invalid (0x%08X)",
+                         (unsigned int)funcAddr);
+            return;
+        }
+
+        s_originalGaugeHandleLButtonUp = (GaugeHandleLButtonUp_t)funcAddr;
+
+        if (Hooks::Install("GaugeHandleLButtonUp",
+                           (void**)&s_originalGaugeHandleLButtonUp,
+                           (void*)GaugeHandleLButtonUp_Detour))
+        {
+            m_hookInstalled = true;
+            LogFramework("PetWindow: Gauge click hook installed (func=0x%08X)",
+                         (unsigned int)funcAddr);
+        }
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        LogFramework("PetWindow: Exception reading CGaugeWnd vtable for click hook");
+    }
+}
+
+void PetWindow::RemoveGaugeClickHook()
+{
+    if (!m_hookInstalled) return;
+
+    Hooks::Remove("GaugeHandleLButtonUp");
+    s_originalGaugeHandleLButtonUp = nullptr;
+    m_hookInstalled = false;
+    LogFramework("PetWindow: Gauge click hook removed");
 }
 
 // ---------------------------------------------------------------------------

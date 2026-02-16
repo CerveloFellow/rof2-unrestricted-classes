@@ -37,13 +37,22 @@ public:
     // Phase 5 debug: dump HP values
     void  DebugHP();
 
+    // Phase 6: Gauge accessors for click detection detour
+    void* GetGauge1() const { return m_newGauge1; }
+    void* GetGauge2() const { return m_newGauge2; }
+
 private:
     // Phase 5: Update a gauge with pet name and HP percentage
     void  UpdateGauge(void* gauge, const char* petName, int hpPercent);
+
+    // Phase 6: Gauge click hook lifecycle
+    void  InstallGaugeClickHook();
+    void  RemoveGaugeClickHook();
 
     void* m_petInfoWnd = nullptr;
     void* m_newGauge1 = nullptr;
     void* m_newGauge2 = nullptr;
     bool  m_initialized = false;   // true after auto-init succeeds
+    bool  m_hookInstalled = false;  // true after gauge click detour installed
     int   m_initCounter = 0;       // pulse counter for delayed init
 };

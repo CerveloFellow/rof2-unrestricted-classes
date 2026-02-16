@@ -51,6 +51,7 @@ public:
     // Public so static command handlers can access
     void ListPets();
     void CyclePet();
+    void SwapToPet(uint32_t spawnID);
     void DebugSpawns();
 
     // Accessor for other mods (e.g. PetWindow)
