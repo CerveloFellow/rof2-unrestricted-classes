@@ -69,6 +69,11 @@
       <EnableUAC>false</EnableUAC>
       <ModuleDefinitionFile>dinput8.def</ModuleDefinitionFile>
     </Link>
+    <PostBuildEvent>
+      <Command>copy /Y "$(OutDir)dinput8.dll" "C:\resurrection\rof2client\dinput8.dll"
+copy /Y "$(OutDir)dinput8.pdb" "C:\resurrection\rof2client\dinput8.pdb"</Command>
+      <Message>Deploying dinput8.dll and PDB to rof2client...</Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -89,6 +94,10 @@
       <EnableUAC>false</EnableUAC>
       <ModuleDefinitionFile>dinput8.def</ModuleDefinitionFile>
     </Link>
+    <PostBuildEvent>
+      <Command>copy /Y "$(OutDir)dinput8.dll" "C:\resurrection\rof2client\dinput8.dll"</Command>
+      <Message>Deploying dinput8.dll to rof2client...</Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="framework.h" />

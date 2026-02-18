@@ -1,7 +1,7 @@
 /**
  * @file multi_pet.h
  * @brief MultiPet mod — tracks multiple simultaneous pets for THJ multiclass
- *        characters and populates XTarget slots so secondary pets show HP bars.
+ *        characters.
  *
  * Pet identification uses two methods:
  *   1. MasterID scanning — OnAddSpawn checks MasterID (offset 0x38C) on each
@@ -11,7 +11,6 @@
  *      overrides MasterID detection with authoritative pet data + class IDs.
  *
  * Spawn resolution: OnAddSpawn/OnRemoveSpawn maintain a SpawnID→pointer map.
- * XTarget: Writes secondary pets into AutoHater slots that have no target.
  * Commands: /pets (list), /petcycle (rotate UI pet), /petdebug (diagnostics).
  *
  * @date 2026-02-14
@@ -33,7 +32,6 @@ struct TrackedPet
     uint32_t    classID   = 0;      // owner class (mage=12, necro=10, etc.)
     void*       pSpawn    = nullptr;
     char        name[64]  = {};
-    int         xtSlot    = -1;     // XTarget slot index, -1 = unassigned
 };
 
 class MultiPet : public IMod
@@ -59,8 +57,6 @@ public:
     const std::vector<TrackedPet>& GetTrackedPets() const { return m_pets; }
 
     void ClearAllTracking();
-    void PopulateXTargetSlots();
-    void ClearXTargetSlot(int slotIndex);
     void ResolvePetSpawns();
     void TryTrackPet(void* pSpawn, uint32_t spawnID);
     void ScanForPets();

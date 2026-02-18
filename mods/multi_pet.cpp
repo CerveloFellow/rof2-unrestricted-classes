@@ -1,12 +1,10 @@
 /**
  * @file multi_pet.cpp
  * @brief Implementation of MultiPet mod — tracks multiple simultaneous pets
- *        for THJ multiclass characters and populates XTarget slots with
- *        secondary pet data so the player sees HP bars for all pets.
+ *        for THJ multiclass characters.
  *
  * Pet identification: Server sends OP_PetList (0x1339) with all pet SpawnIDs.
  * Spawn resolution: OnAddSpawn/OnRemoveSpawn maintain a SpawnID→pointer map.
- * XTarget: Writes secondary pets into AutoHater slots that have no target.
  * Commands: /pets (list), /petcycle (rotate UI pet), /petdebug (diagnostics).
  *
  * @date 2026-02-14
@@ -45,29 +43,7 @@ static constexpr uint32_t OFF_MGR_NEXT_ID     = 0x04;
 using GetSpawnByID_t = void*(__fastcall*)(void* thisPtr, void* edx, int id);
 static GetSpawnByID_t s_GetSpawnByID = nullptr;
 
-// PcClient offset
-static constexpr uint32_t OFF_PC_XTARGET_LIST = 0x31B8; // PcClient::pExtendedTargetList
-
-// ExtendedTargetList layout
-static constexpr uint32_t OFF_XTL_LENGTH = 0x04;
-static constexpr uint32_t OFF_XTL_ARRAY  = 0x08;
-
-// ExtendedTargetSlot (0x4c bytes each)
-static constexpr uint32_t OFF_XTS_TYPE     = 0x00;
-static constexpr uint32_t OFF_XTS_STATUS   = 0x04;
-static constexpr uint32_t OFF_XTS_SPAWN_ID = 0x08;
-static constexpr uint32_t OFF_XTS_NAME     = 0x0C;
-static constexpr uint32_t XTARGET_SLOT_SIZE = 0x4C;
-
-// XTarget type/status values
-static constexpr uint32_t XTARGET_EMPTY        = 0;
-static constexpr uint32_t XTARGET_AUTO_HATER   = 1;
-static constexpr uint32_t XTARGET_SPECIFIC_NPC = 3;
-static constexpr uint32_t XTSTATUS_EMPTY        = 0;
-static constexpr uint32_t XTSTATUS_CURRENT_ZONE = 1;
-
 // Opcodes
-static constexpr uint32_t OP_XTargetResponse = 0x4D59;
 static constexpr uint32_t OP_PetList         = 0x1339;
 
 // ---------------------------------------------------------------------------
@@ -108,34 +84,6 @@ static inline uint32_t GetMasterID(void* pSpawn)
 {
     return *reinterpret_cast<uint32_t*>(
         reinterpret_cast<uintptr_t>(pSpawn) + OFF_SPAWN_MASTER_ID);
-}
-
-// ---------------------------------------------------------------------------
-// XTarget helpers
-// ---------------------------------------------------------------------------
-
-static uintptr_t GetExtendedTargetList()
-{
-    auto* pPC = GameState::GetLocalPC();
-    if (!pPC) return 0;
-    return *reinterpret_cast<uintptr_t*>(
-        reinterpret_cast<uintptr_t>(pPC) + OFF_PC_XTARGET_LIST);
-}
-
-static uintptr_t GetXTargetSlotPtr(uintptr_t pXTL, int slotIndex)
-{
-    if (!pXTL) return 0;
-    int slotCount = *reinterpret_cast<int*>(pXTL + OFF_XTL_LENGTH);
-    if (slotIndex < 0 || slotIndex >= slotCount) return 0;
-    uintptr_t pArray = *reinterpret_cast<uintptr_t*>(pXTL + OFF_XTL_ARRAY);
-    if (!pArray) return 0;
-    return pArray + static_cast<uintptr_t>(slotIndex) * XTARGET_SLOT_SIZE;
-}
-
-static int GetXTargetSlotCount(uintptr_t pXTL)
-{
-    if (!pXTL) return 0;
-    return *reinterpret_cast<int*>(pXTL + OFF_XTL_LENGTH);
 }
 
 // ---------------------------------------------------------------------------
@@ -268,14 +216,12 @@ void MultiPet::OnRemoveSpawn(void* pSpawn)
     if (it != m_pets.end())
     {
         LogFramework("MultiPet: Pet '%s' (ID %u) despawned", it->name, it->spawnID);
-        if (it->xtSlot >= 0)
-            ClearXTargetSlot(it->xtSlot);
         m_pets.erase(it);
     }
 }
 
 // ---------------------------------------------------------------------------
-// OnPulse — XTarget population
+// OnPulse — periodic pet scanning
 // ---------------------------------------------------------------------------
 
 void MultiPet::OnPulse()
@@ -309,9 +255,6 @@ void MultiPet::OnPulse()
         m_scanCounter = 0;
         ScanForPets();
     }
-
-    // Populate XTarget slots for tracked secondary pets
-    PopulateXTargetSlots();
 }
 
 // ---------------------------------------------------------------------------
@@ -340,12 +283,6 @@ bool MultiPet::OnIncomingMessage(uint32_t opcode, const void* buffer, uint32_t s
 
         LogFramework("MultiPet: Received OP_PetList with %u pets", count);
 
-        // Clear XTarget slots for old tracked pets
-        for (auto& pet : m_pets)
-        {
-            if (pet.xtSlot >= 0)
-                ClearXTargetSlot(pet.xtSlot);
-        }
         m_pets.clear();
 
         // Get UI pet ID so we can skip it
@@ -395,52 +332,6 @@ bool MultiPet::OnIncomingMessage(uint32_t opcode, const void* buffer, uint32_t s
         ResolvePetSpawns();
 
         return false;  // Suppress — custom opcode, don't pass to client
-    }
-
-    if (opcode == OP_XTargetResponse)
-    {
-        // Observe server XTarget updates to avoid slot conflicts
-        if (size < 8) return true;
-
-        const uint8_t* buf = static_cast<const uint8_t*>(buffer);
-        uint32_t offset = 4; // skip MaxTargets
-
-        uint32_t count;
-        memcpy(&count, buf + offset, 4);
-        offset += 4;
-
-        for (uint32_t i = 0; i < count; ++i)
-        {
-            if (offset + 9 > size) break;
-
-            uint32_t slotIndex;
-            memcpy(&slotIndex, buf + offset, 4);
-            offset += 4;
-
-            offset += 1; // status
-
-            uint32_t spawnID;
-            memcpy(&spawnID, buf + offset, 4);
-            offset += 4;
-
-            // Skip name string
-            while (offset < size && buf[offset] != '\0') offset++;
-            if (offset < size) offset++;
-
-            // If server wrote to a slot we claimed, release it
-            for (auto& pet : m_pets)
-            {
-                if (pet.xtSlot == static_cast<int>(slotIndex))
-                {
-                    LogFramework("MultiPet: Server reclaimed XTarget slot %d — will reassign pet '%s'",
-                        pet.xtSlot, pet.name);
-                    pet.xtSlot = -1;
-                    break;
-                }
-            }
-        }
-
-        return true;  // Pass through
     }
 
     return true;
@@ -566,111 +457,11 @@ void MultiPet::ScanForPets()
 }
 
 // ---------------------------------------------------------------------------
-// XTarget slot population
-// ---------------------------------------------------------------------------
-
-void MultiPet::PopulateXTargetSlots()
-{
-    uintptr_t pXTL = GetExtendedTargetList();
-    if (!pXTL) return;
-
-    int slotCount = GetXTargetSlotCount(pXTL);
-    if (slotCount <= 0) return;
-
-    // First pass: verify existing slot assignments still hold
-    for (auto& pet : m_pets)
-    {
-        if (pet.xtSlot < 0) continue;
-
-        uintptr_t pSlot = GetXTargetSlotPtr(pXTL, pet.xtSlot);
-        if (!pSlot)
-        {
-            pet.xtSlot = -1;
-            continue;
-        }
-
-        uint32_t slotType = *reinterpret_cast<uint32_t*>(pSlot + OFF_XTS_TYPE);
-        uint32_t slotSpawnID = *reinterpret_cast<uint32_t*>(pSlot + OFF_XTS_SPAWN_ID);
-
-        // If slot was overwritten by server or cleared, release it
-        if (slotType != XTARGET_SPECIFIC_NPC || slotSpawnID != pet.spawnID)
-        {
-            pet.xtSlot = -1;
-        }
-    }
-
-    // Second pass: assign unassigned pets to available slots
-    for (auto& pet : m_pets)
-    {
-        if (pet.xtSlot >= 0) continue;  // Already assigned
-        if (!pet.pSpawn) continue;       // Not yet resolved
-
-        for (int i = 0; i < slotCount; ++i)
-        {
-            uintptr_t pSlot = GetXTargetSlotPtr(pXTL, i);
-            if (!pSlot) continue;
-
-            uint32_t slotType = *reinterpret_cast<uint32_t*>(pSlot + OFF_XTS_TYPE);
-            uint32_t slotSpawnID = *reinterpret_cast<uint32_t*>(pSlot + OFF_XTS_SPAWN_ID);
-
-            // Available slot: empty (type 0) OR AutoHater with no target (type 1, spawnID 0)
-            bool isAvailable = (slotType == XTARGET_EMPTY && slotSpawnID == 0) ||
-                               (slotType == XTARGET_AUTO_HATER && slotSpawnID == 0);
-            if (!isAvailable) continue;
-
-            // Check no other tracked pet claims this slot
-            bool slotTaken = false;
-            for (const auto& other : m_pets)
-            {
-                if (other.xtSlot == i) { slotTaken = true; break; }
-            }
-            if (slotTaken) continue;
-
-            // Write to the slot
-            *reinterpret_cast<uint32_t*>(pSlot + OFF_XTS_TYPE) = XTARGET_SPECIFIC_NPC;
-            *reinterpret_cast<uint32_t*>(pSlot + OFF_XTS_STATUS) = XTSTATUS_CURRENT_ZONE;
-            *reinterpret_cast<uint32_t*>(pSlot + OFF_XTS_SPAWN_ID) = pet.spawnID;
-
-            char* slotName = reinterpret_cast<char*>(pSlot + OFF_XTS_NAME);
-            strncpy_s(slotName, 64, pet.name, _TRUNCATE);
-
-            pet.xtSlot = i;
-            LogFramework("MultiPet: Assigned pet '%s' (ID %u) to XTarget slot %d",
-                pet.name, pet.spawnID, i);
-            break;
-        }
-    }
-}
-
-void MultiPet::ClearXTargetSlot(int slotIndex)
-{
-    uintptr_t pXTL = GetExtendedTargetList();
-    if (!pXTL) return;
-
-    uintptr_t pSlot = GetXTargetSlotPtr(pXTL, slotIndex);
-    if (!pSlot) return;
-
-    // Restore to AutoHater with no target (the default state)
-    *reinterpret_cast<uint32_t*>(pSlot + OFF_XTS_TYPE) = XTARGET_AUTO_HATER;
-    *reinterpret_cast<uint32_t*>(pSlot + OFF_XTS_STATUS) = XTSTATUS_EMPTY;
-    *reinterpret_cast<uint32_t*>(pSlot + OFF_XTS_SPAWN_ID) = 0;
-
-    char* slotName = reinterpret_cast<char*>(pSlot + OFF_XTS_NAME);
-    memset(slotName, 0, 64);
-}
-
-// ---------------------------------------------------------------------------
 // Clear all tracking state
 // ---------------------------------------------------------------------------
 
 void MultiPet::ClearAllTracking()
 {
-    for (auto& pet : m_pets)
-    {
-        if (pet.xtSlot >= 0)
-            ClearXTargetSlot(pet.xtSlot);
-    }
-
     m_pets.clear();
     m_spawnMap.clear();
     m_localSpawnID = 0;
@@ -712,10 +503,8 @@ void MultiPet::ListPets()
     for (const auto& pet : m_pets)
     {
         const char* className = GetClassName(pet.classID);
-        if (pet.xtSlot >= 0)
-            WriteChatf("  %s - ID %u (%s) [XTarget slot %d]", pet.name, pet.spawnID, className, pet.xtSlot);
-        else if (pet.pSpawn)
-            WriteChatf("  %s - ID %u (%s) [no XTarget slot]", pet.name, pet.spawnID, className);
+        if (pet.pSpawn)
+            WriteChatf("  %s - ID %u (%s)", pet.name, pet.spawnID, className);
         else
             WriteChatf("  (unresolved) - ID %u (%s)", pet.spawnID, className);
         hasPets = true;
@@ -798,11 +587,7 @@ void MultiPet::CyclePet()
         [newUIPetID](const TrackedPet& p) { return p.spawnID == newUIPetID; });
 
     if (it != m_pets.end())
-    {
-        if (it->xtSlot >= 0)
-            ClearXTargetSlot(it->xtSlot);
         m_pets.erase(it);
-    }
 
     // Write new PetID
     SetPetID(pLocal, static_cast<int>(newUIPetID));
@@ -872,10 +657,6 @@ void MultiPet::SwapToPet(uint32_t spawnID)
 
     if (it == m_pets.end()) return;  // shouldn't happen
 
-    // Clear target pet's XTarget slot before removing
-    if (it->xtSlot >= 0)
-        ClearXTargetSlot(it->xtSlot);
-
     m_pets.erase(it);
 
     // Set new UI pet
@@ -913,38 +694,10 @@ void MultiPet::DebugSpawns()
 
     for (const auto& pet : m_pets)
     {
-        WriteChatf("    Pet '%s' ID %u class %u/%s spawn=%s xtSlot=%d",
+        WriteChatf("    Pet '%s' ID %u class %u/%s spawn=%s",
             pet.name[0] ? pet.name : "(unresolved)",
             pet.spawnID, pet.classID, GetClassName(pet.classID),
-            pet.pSpawn ? "yes" : "no", pet.xtSlot);
-    }
-
-    // XTarget state
-    uintptr_t pXTL = GetExtendedTargetList();
-    if (pXTL)
-    {
-        int slotCount = GetXTargetSlotCount(pXTL);
-        WriteChatf("  --- XTarget slots (%d total) ---", slotCount);
-        for (int i = 0; i < slotCount; ++i)
-        {
-            uintptr_t pSlot = GetXTargetSlotPtr(pXTL, i);
-            if (!pSlot) continue;
-
-            uint32_t slotType = *reinterpret_cast<uint32_t*>(pSlot + OFF_XTS_TYPE);
-            uint32_t slotStatus = *reinterpret_cast<uint32_t*>(pSlot + OFF_XTS_STATUS);
-            uint32_t slotSpawnID = *reinterpret_cast<uint32_t*>(pSlot + OFF_XTS_SPAWN_ID);
-            const char* slotName = reinterpret_cast<const char*>(pSlot + OFF_XTS_NAME);
-
-            if (slotType != XTARGET_AUTO_HATER || slotSpawnID != 0)
-            {
-                WriteChatf("    [%d] type=%u status=%u spawnID=%u name='%s'",
-                    i, slotType, slotStatus, slotSpawnID, slotName);
-            }
-        }
-    }
-    else
-    {
-        WriteChatf("  XTarget list: NULL");
+            pet.pSpawn ? "yes" : "no");
     }
 
     // Scan spawns via GetSpawnByID for diagnostics

@@ -87,12 +87,6 @@ static constexpr uint32_t OFF_GAUGE_LASTFRAMETARGET = 0x204;  // int
 static constexpr uint32_t OFF_GAUGE_TARGETVAL       = 0x238;  // int
 static constexpr uint32_t OFF_GAUGE_USETARGETVAL    = 0x23C;  // bool
 
-// LabelCache — game-maintained struct with reliable XTarget HP percentages
-// __LabelCache_x = 0xF74AB0 (raw offset, needs ASLR correction)
-// ExtendedTargetHPPct at +0x8F4: int[20] indexed by XTarget slot
-static constexpr uint32_t RAW_LABELCACHE            = 0xF74AB0;
-static constexpr uint32_t OFF_LC_XTARGET_HP_PCT     = 0x8F4;
-static constexpr int       MAX_XTARGET_SLOTS        = 20;
 
 // Phase 6: CGaugeWnd::HandleLButtonUp detour
 // HandleLButtonUp is at vtable offset 0x03C (virtual index 15)
@@ -369,10 +363,6 @@ void PetWindow::OnPulse()
 
     const auto& pets = multiPet->GetTrackedPets();
 
-    // Resolve LabelCache address (ASLR-corrected) for reliable XTarget HP
-    uintptr_t eqBase = (uintptr_t)GetModuleHandleA("eqgame.exe");
-    uintptr_t labelCache = (RAW_LABELCACHE - 0x400000) + eqBase;
-
     // Only update gauges when we have actual pet data — don't write defaults
     // so the gauges keep their XML text until MultiPet re-detects pets
 
@@ -380,26 +370,13 @@ void PetWindow::OnPulse()
     if (pets.size() >= 1 && pets[0].pSpawn)
     {
         int pct = 0;
-        // Use XTarget HP percentage from LabelCache (game-maintained, always accurate)
-        if (pets[0].xtSlot >= 0 && pets[0].xtSlot < MAX_XTARGET_SLOTS)
+        __try
         {
-            __try
-            {
-                pct = *(int*)(labelCache + OFF_LC_XTARGET_HP_PCT + pets[0].xtSlot * 4);
-            }
-            __except (EXCEPTION_EXECUTE_HANDLER) {}
+            int hpCur = *(int32_t*)((uintptr_t)pets[0].pSpawn + OFF_SPAWN_HPCURRENT);
+            int hpMax = *(int32_t*)((uintptr_t)pets[0].pSpawn + OFF_SPAWN_HPMAX);
+            pct = (hpMax > 0) ? (hpCur * 100 / hpMax) : 0;
         }
-        else
-        {
-            // Fallback to spawn HP if no XTarget slot assigned
-            __try
-            {
-                int hpCur = *(int32_t*)((uintptr_t)pets[0].pSpawn + OFF_SPAWN_HPCURRENT);
-                int hpMax = *(int32_t*)((uintptr_t)pets[0].pSpawn + OFF_SPAWN_HPMAX);
-                pct = (hpMax > 0) ? (hpCur * 100 / hpMax) : 0;
-            }
-            __except (EXCEPTION_EXECUTE_HANDLER) {}
-        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {}
 
         char cleanName[64];
         CleanPetName(cleanName, sizeof(cleanName), pets[0].name);
@@ -410,24 +387,13 @@ void PetWindow::OnPulse()
     if (pets.size() >= 2 && pets[1].pSpawn)
     {
         int pct = 0;
-        if (pets[1].xtSlot >= 0 && pets[1].xtSlot < MAX_XTARGET_SLOTS)
+        __try
         {
-            __try
-            {
-                pct = *(int*)(labelCache + OFF_LC_XTARGET_HP_PCT + pets[1].xtSlot * 4);
-            }
-            __except (EXCEPTION_EXECUTE_HANDLER) {}
+            int hpCur = *(int32_t*)((uintptr_t)pets[1].pSpawn + OFF_SPAWN_HPCURRENT);
+            int hpMax = *(int32_t*)((uintptr_t)pets[1].pSpawn + OFF_SPAWN_HPMAX);
+            pct = (hpMax > 0) ? (hpCur * 100 / hpMax) : 0;
         }
-        else
-        {
-            __try
-            {
-                int hpCur = *(int32_t*)((uintptr_t)pets[1].pSpawn + OFF_SPAWN_HPCURRENT);
-                int hpMax = *(int32_t*)((uintptr_t)pets[1].pSpawn + OFF_SPAWN_HPMAX);
-                pct = (hpMax > 0) ? (hpCur * 100 / hpMax) : 0;
-            }
-            __except (EXCEPTION_EXECUTE_HANDLER) {}
-        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {}
 
         char cleanName[64];
         CleanPetName(cleanName, sizeof(cleanName), pets[1].name);
@@ -761,13 +727,8 @@ void PetWindow::DebugHP()
         return;
     }
 
-    // Resolve LabelCache for XTarget HP comparison
-    uintptr_t eqBase = (uintptr_t)GetModuleHandleA("eqgame.exe");
-    uintptr_t labelCache = (RAW_LABELCACHE - 0x400000) + eqBase;
-
     const auto& pets = multiPet->GetTrackedPets();
     WriteChatf("  Tracked secondary pets: %d", (int)pets.size());
-    WriteChatf("  LabelCache: 0x%08X", (unsigned int)labelCache);
 
     for (int i = 0; i < (int)pets.size(); ++i)
     {
@@ -783,15 +744,10 @@ void PetWindow::DebugHP()
                 int hpMax = *(int32_t*)((uintptr_t)pet.pSpawn + OFF_SPAWN_HPMAX);
                 int spawnPct = (hpMax > 0) ? (hpCur * 100 / hpMax) : 0;
 
-                // Read XTarget HP from LabelCache
-                int xtPct = -1;
-                if (pet.xtSlot >= 0 && pet.xtSlot < MAX_XTARGET_SLOTS)
-                    xtPct = *(int*)(labelCache + OFF_LC_XTARGET_HP_PCT + pet.xtSlot * 4);
-
-                WriteChatf("  [%d] '%s' xtSlot=%d spawn=0x%08X",
-                    i, cleanName, pet.xtSlot, (unsigned int)(uintptr_t)pet.pSpawn);
-                WriteChatf("      SpawnHP: %d/%d = %d%%  XTargetHP: %d%%",
-                    hpCur, hpMax, spawnPct, xtPct);
+                WriteChatf("  [%d] '%s' spawn=0x%08X",
+                    i, cleanName, (unsigned int)(uintptr_t)pet.pSpawn);
+                WriteChatf("      SpawnHP: %d/%d = %d%%",
+                    hpCur, hpMax, spawnPct);
             }
             __except (EXCEPTION_EXECUTE_HANDLER)
             {
@@ -800,7 +756,7 @@ void PetWindow::DebugHP()
         }
         else
         {
-            WriteChatf("  [%d] '%s' — no spawn pointer (xtSlot=%d)", i, pet.name, pet.xtSlot);
+            WriteChatf("  [%d] '%s' — no spawn pointer", i, pet.name);
         }
     }
 
