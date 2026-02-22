@@ -2,5 +2,5 @@
   "name": "dinput8-proxy",
   "version-string": "1.0.0",
   "builtin-baseline": "f4155cdf81be1897350f8fab082fdecc0d4469fd",
-  "dependencies": ["detours"]
+  "dependencies": ["detours", "fmt"]
 }

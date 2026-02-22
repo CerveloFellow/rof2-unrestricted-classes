@@ -15,19 +15,19 @@
     <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{cc75bdd5-2625-436b-92ae-4d31a8d314f0}</ProjectGuid>
     <RootNamespace>dinput8</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.19041.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
@@ -47,10 +47,16 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <OutDir>$(SolutionDir)build\bin\debug\</OutDir>
     <IntDir>$(SolutionDir)build\obj\debug\$(ProjectName)\</IntDir>
+    <IncludePath>$(ProjectDir)vcpkg_installed\x86-windows-static\include</IncludePath>
+    <ExecutablePath>C:\git-Kraqurjak\rof2-unrestricted-classes-phoenix\vcpkg_installed\x86-windows-static\include;$(ExecutablePath)</ExecutablePath>
+    <LibraryPath>C:\git-Kraqurjak\rof2-unrestricted-classes-phoenix\vcpkg_installed\x86-windows-static\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <OutDir>$(SolutionDir)build\bin\release\</OutDir>
     <IntDir>$(SolutionDir)build\obj\release\$(ProjectName)\</IntDir>
+    <IncludePath>$(ProjectDir)vcpkg_installed\x86-windows-static\include</IncludePath>
+    <ExecutablePath>C:\git-Kraqurjak\rof2-unrestricted-classes-phoenix\vcpkg_installed\x86-windows-static\include;$(ExecutablePath)</ExecutablePath>
+    <LibraryPath>C:\git-Kraqurjak\rof2-unrestricted-classes-phoenix\vcpkg_installed\x86-windows-static\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -68,12 +74,8 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
       <ModuleDefinitionFile>dinput8.def</ModuleDefinitionFile>
+      <AdditionalDependencies>detours.lib;kernel32.lib;user32.lib;gdi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
-    <PostBuildEvent>
-      <Command>copy /Y "$(OutDir)dinput8.dll" "C:\resurrection\rof2client\dinput8.dll"
-copy /Y "$(OutDir)dinput8.pdb" "C:\resurrection\rof2client\dinput8.pdb"</Command>
-      <Message>Deploying dinput8.dll and PDB to rof2client...</Message>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -93,11 +95,8 @@ copy /Y "$(OutDir)dinput8.pdb" "C:\resurrection\rof2client\dinput8.pdb"</Command
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
       <ModuleDefinitionFile>dinput8.def</ModuleDefinitionFile>
+      <AdditionalDependencies>detours.lib;kernel32.lib;user32.lib;gdi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
-    <PostBuildEvent>
-      <Command>copy /Y "$(OutDir)dinput8.dll" "C:\resurrection\rof2client\dinput8.dll"</Command>
-      <Message>Deploying dinput8.dll to rof2client...</Message>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="framework.h" />

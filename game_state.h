@@ -31,7 +31,7 @@ void ResolveGlobals();
 // Typed getters — return nullptr/null if the game pointer is not yet set.
 eqlib::PlayerClient*        GetLocalPlayer();
 eqlib::PlayerClient*        GetTarget();
-void                        SetTarget(eqlib::PlayerClient* pSpawn);
+void SetTarget(eqlib::PlayerClient* pTarget);
 eqlib::PlayerClient*        GetControlledPlayer();
 eqlib::PlayerManagerClient* GetSpawnManager();
 eqlib::PcClient*            GetLocalPC();
