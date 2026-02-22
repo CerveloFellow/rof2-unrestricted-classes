@@ -1,0 +1,38 @@
+<Label item="CurrentPetCmds">
+	<ScreenID>CurrentPetCmds</ScreenID>
+	<Font>3</Font>
+	<Text>Active Pet Cmds</Text>
+	<RelativePosition>true</RelativePosition>
+	<Location>
+		<X>2</X>
+		<Y>190</Y>
+	</Location>
+	<Size>
+		<CX>108</CX>
+		<CY>12</CY>
+	</Size>
+	<TextColor>
+       <R>255</R>
+       <G>255</G>
+       <B>255</B>
+	</TextColor>
+</Label> 
+<Label item="CustomPetCmds">
+	<ScreenID>CustomPetCmds</ScreenID>
+	<Font>3</Font>
+	<Text>Macro Commands</Text>
+	<RelativePosition>true</RelativePosition>
+	<Location>
+		<X>150</X>
+		<Y>2</Y>
+	</Location>
+	<Size>
+		<CX>108</CX>
+		<CY>12</CY>
+	</Size>
+	<TextColor>
+       <R>255</R>
+       <G>255</G>
+       <B>255</B>
+	</TextColor>
+</Label>

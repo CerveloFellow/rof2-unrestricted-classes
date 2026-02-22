@@ -44,12 +44,6 @@
     <ClInclude Include="mods\mod_interface.h">
       <Filter>Header Files\mods</Filter>
     </ClInclude>
-    <ClInclude Include="mods\multiclass_data.h">
-      <Filter>Header Files\mods</Filter>
-    </ClInclude>
-    <ClInclude Include="mods\labels.h">
-      <Filter>Header Files\mods</Filter>
-    </ClInclude>
     <ClInclude Include="mods\spellbook_unlock.h">
       <Filter>Header Files\mods</Filter>
     </ClInclude>
@@ -62,20 +56,38 @@
     <ClInclude Include="commands.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="config.h">
+    <ClInclude Include="mods\combat_abilities.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="mq_compat.h">
+    <ClInclude Include="mods\pyrelight_patches.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="mods\map\map.h">
-      <Filter>Header Files\mods\map</Filter>
+    <ClInclude Include="mods\version_check.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="mods\map\map_object.h">
-      <Filter>Header Files\mods\map</Filter>
+    <ClInclude Include="mods\cpu_speed_fix.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="mods\map\map_mod.h">
-      <Filter>Header Files\mods\map</Filter>
+    <ClInclude Include="mods\race_injection.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="mods\zone_injection.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="mods\mq2_prevention.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="mods\exception_fix.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="mods\who_multiclass.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="mods\multi_pet.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="mods\pet_window.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -87,12 +99,6 @@
     </ClCompile>
     <ClCompile Include="hooks.cpp">
       <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="mods\multiclass_data.cpp">
-      <Filter>Source Files\mods</Filter>
-    </ClCompile>
-    <ClCompile Include="mods\labels.cpp">
-      <Filter>Source Files\mods</Filter>
     </ClCompile>
     <ClCompile Include="mods\spellbook_unlock.cpp">
       <Filter>Source Files\mods</Filter>
@@ -106,22 +112,40 @@
     <ClCompile Include="commands.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="config.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="mq_compat.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="mods\map\map_object.cpp">
-      <Filter>Source Files\mods\map</Filter>
-    </ClCompile>
-    <ClCompile Include="mods\map\map_api.cpp">
-      <Filter>Source Files\mods\map</Filter>
-    </ClCompile>
-    <ClCompile Include="mods\map\map_mod.cpp">
-      <Filter>Source Files\mods\map</Filter>
-    </ClCompile>
     <ClCompile Include="pch.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="mods\combat_abilities.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="mods\pyrelight_patches.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="mods\version_check.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="mods\cpu_speed_fix.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="mods\race_injection.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="mods\zone_injection.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="mods\mq2_prevention.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="mods\exception_fix.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="mods\who_multiclass.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="mods\multi_pet.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="mods\pet_window.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

@@ -3,6 +3,9 @@ Debug/
 Release/
 bin/
 build/
+Build/
+eqlib/
+vcpkg/
 *.obj
 *.pch
 *.ilk
